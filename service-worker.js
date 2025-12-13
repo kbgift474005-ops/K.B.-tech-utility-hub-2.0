@@ -1,99 +1,67 @@
-const CACHE_NAME = 'calcuplanner-v1';
-
-// Files jo hum cache karna chahte hain
+const CACHE_NAME = 'kb-utility-hub-v2.0.1'; // Cache version
+// उन सभी फ़ाइलों की सूची जिन्हें ऑफ़लाइन पहुँच के लिए कैश किया जाना चाहिए
 const urlsToCache = [
-    '/',
-    '/index.html',
-    '/manifest.json',
-    // External Libraries (CDNs)
-    'https://cdn.tailwindcss.com',
-    'https://unpkg.com/lucide@latest',
-    'https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js',
-    // App Assets (Aapko yeh folder structure banana hoga)
-    '/icons/icon-72x72.png',
-    '/icons/icon-96x96.png',
-    '/icons/icon-144x144.png',
-    '/icons/icon-192x192.png',
-    '/icons/icon-512x512.png'
+  './', // index.html के लिए आवश्यक है
+  './index.html',
+  './manifest.json',
+  './service-worker.js',
+  // Lucide Icons (CDN) - यह आमतौर पर मुश्किल होता है, इसलिए हम सिर्फ़ लोकल फ़ाइलों को कैश करेंगे
+  // Tailwind CSS (CDN) - इसे भी छोड़ रहे हैं क्योंकि यह CDN पर है।
+  // अगर आप अपनी कोई CSS, JS, या इमेज फ़ाइलें इस्तेमाल करते हैं, तो उन्हें यहाँ जोड़ें।
+  // उदाहरण के लिए:
+  // './css/style.css', 
+  // './js/app.js', 
+  // './icons/icon-192x192.png',
 ];
 
-// 1. Install Event: Cache all assets
+// इंस्टॉल इवेंट: कैशिंग शुरू करें
 self.addEventListener('install', event => {
-    // Service worker ko tab tak rukne ke liye kehta hai jab tak caching complete na ho jaye
-    event.waitUntil(
-        caches.open(CACHE_NAME)
-            .then(cache => {
-                console.log('Opened cache and added all resources');
-                return cache.addAll(urlsToCache);
-            })
-            .catch(err => {
-                console.error('Failed to cache resources:', err);
-            })
-    );
+  console.log('[Service Worker] Installing...');
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => {
+        console.log('[Service Worker] Caching app shell');
+        // ensure all essential files are cached
+        return cache.addAll(urlsToCache).catch(err => {
+            console.error('Failed to cache some files:', err);
+        });
+      })
+  );
+  self.skipWaiting(); // नया SW तुरंत सक्रिय हो जाएगा
 });
 
-// 2. Fetch Event: Cache-First Strategy
-self.addEventListener('fetch', event => {
-    // Cross-origin requests ko ignore karein
-    if (event.request.url.startsWith('chrome-extension://')) {
-        return;
-    }
-    
-    event.respondWith(
-        caches.match(event.request)
-            .then(response => {
-                // Agar cache hit hua, toh cache se response do
-                if (response) {
-                    return response;
-                }
-                
-                // Agar cache mein nahi mila, toh network se fetch karo aur dynamic cache karo
-                return fetch(event.request).then(
-                    response => {
-                        // Response valid nahi hai, toh return karo
-                        if (!response || response.status !== 200 || response.type !== 'basic') {
-                            return response;
-                        }
-                        
-                        const responseToCache = response.clone();
-
-                        // Dynamic caching: Sirf zaroori aur choti files cache karein
-                        if (event.request.method === 'GET' && !event.request.url.includes('/api/')) {
-                             caches.open(CACHE_NAME)
-                                .then(cache => {
-                                    cache.put(event.request, responseToCache);
-                                });
-                        }
-                        return response;
-                    }
-                );
-            })
-            // Agar network se bhi fetch na ho paye (offline hone par), toh error de dein
-            .catch(error => {
-                console.error('Fetching failed:', error);
-                // Optional: Offline page dikha sakte hain
-                // return caches.match('/offline.html');
-            })
-    );
-});
-
-// 3. Activate Event: Clean up old caches
+// सक्रियण इवेंट: पुराने कैशे साफ़ करें
 self.addEventListener('activate', event => {
-    const cacheWhitelist = [CACHE_NAME];
-    
-    event.waitUntil(
-        caches.keys().then(cacheNames => {
-            return Promise.all(
-                cacheNames.map(cacheName => {
-                    if (cacheWhitelist.indexOf(cacheName) === -1) {
-                        console.log('Deleting old cache:', cacheName);
-                        return caches.delete(cacheName);
-                    }
-                })
-            );
+  console.log('[Service Worker] Activating...');
+  const cacheWhitelist = [CACHE_NAME];
+  event.waitUntil(
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(cacheName => {
+          if (cacheWhitelist.indexOf(cacheName) === -1) {
+            console.log('[Service Worker] Deleting old cache:', cacheName);
+            return caches.delete(cacheName);
+          }
         })
-    );
-    // Service Worker ko immediately control claim karne ke liye
-    return self.clients.claim();
+      );
+    })
+  );
+  return self.clients.claim(); // सुनिश्चित करें कि SW तुरंत नियंत्रित करना शुरू कर दे
 });
+
+// फ़ेच इवेंट: कैश से सामग्री लौटाएँ, यदि उपलब्ध हो
+self.addEventListener('fetch', event => {
+  event.respondWith(
+    caches.match(event.request)
+      .then(response => {
+        // कैशे में मिला, कैशे से लौटाएँ
+        if (response) {
+          return response;
+        }
+        // कैशे में नहीं मिला, नेटवर्क से प्राप्त करें
+        return fetch(event.request);
+      })
+  );
+});
+
 
