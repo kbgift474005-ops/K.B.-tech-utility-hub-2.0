@@ -1,89 +1,69 @@
-// Service Worker Version (Cache Busting)
-const CACHE_NAME = 'calc-app-cache-v2.4'; 
-
-// List of all files to cache on install
+const CACHE_NAME = 'kb-calc-v1';
 const urlsToCache = [
     '/',
     '/index.html',
-    '/manifest.json',
-    // External Libraries (if you trust the CDN to be stable)
+    // --- आपकी CSS/JS/LIBRARIES ---
     'https://cdn.tailwindcss.com',
     'https://unpkg.com/lucide@latest',
     'https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js',
-    // Assets (Assume a standard icon directory setup)
-    '/icons/icon-512x512.png',
+    // --- Icons (मान लें कि ये रूट फोल्डर में हैं) ---
     '/icons/icon-192x192.png',
-    // Add other common icon sizes as needed from manifest.json
-    // Note: The rest of the JS/CSS is inline in index.html, so it's inherently cached with index.html
+    '/icons/icon-512x512.png'
 ];
 
-// --- INSTALL EVENT ---
+// 1. इंस्टॉलेशन: आवश्यक फ़ाइलों को कैश करें
 self.addEventListener('install', (event) => {
-    // Force the service worker to activate immediately
-    self.skipWaiting();
-    
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then((cache) => {
-                console.log('[Service Worker] Caching App Shell');
-                // Cache all necessary files
+                console.log('Opened cache and adding assets.');
                 return cache.addAll(urlsToCache);
+            })
+            .catch(err => {
+                console.error('Failed to cache required assets:', err);
             })
     );
 });
 
-// --- ACTIVATE EVENT ---
+// 2. फ़ेच: कैश से या नेटवर्क से डेटा दें
+self.addEventListener('fetch', (event) => {
+    // केवल GET रिक्वेस्ट और http/https स्कीमा के लिए कैशिंग
+    if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) {
+        return;
+    }
+    
+    event.respondWith(
+        caches.match(event.request)
+            .then((response) => {
+                // अगर कैश में है, तो कैश से लौटाएँ
+                if (response) {
+                    return response;
+                }
+                
+                // अगर कैश में नहीं है, तो नेटवर्क से फ़ेच करें
+                return fetch(event.request);
+            })
+            .catch(() => {
+                // अगर नेटवर्क से भी फेल हो जाए (जैसे ऑफ़लाइन होने पर), 
+                // तो यहाँ आप एक ऑफ़लाइन पेज दिखा सकते हैं (जो हमने कैश किया है)
+                return caches.match('/index.html'); 
+            })
+    );
+});
+
+// 3. एक्टिवेशन: पुराने कैश को साफ़ करें
 self.addEventListener('activate', (event) => {
-    // Clear old caches
+    const cacheWhitelist = [CACHE_NAME];
     event.waitUntil(
         caches.keys().then((cacheNames) => {
             return Promise.all(
                 cacheNames.map((cacheName) => {
-                    if (cacheName !== CACHE_NAME) {
-                        console.log('[Service Worker] Deleting old cache:', cacheName);
+                    if (cacheWhitelist.indexOf(cacheName) === -1) {
+                        console.log('Deleting old cache:', cacheName);
                         return caches.delete(cacheName);
                     }
                 })
             );
         })
-    );
-    // Claim control of clients immediately
-    return self.clients.claim(); 
-});
-
-// --- FETCH EVENT (Serving cached content) ---
-self.addEventListener('fetch', (event) => {
-    // Strategy: Cache-First for static assets, Network-Fallback for all others
-    
-    // Check if the request is for a network-only resource (like the custom fonts or complex data)
-    // Here, we treat everything as Cache-First as the app is mostly static HTML/JS/CSS
-    
-    event.respondWith(
-        caches.match(event.request)
-            .then((response) => {
-                // Cache hit - return response
-                if (response) {
-                    return response;
-                }
-                
-                // No cache hit - Fetch from network
-                return fetch(event.request).then((networkResponse) => {
-                    
-                    // Optional: Update the cache with new data for the next time
-                    return caches.open(CACHE_NAME).then((cache) => {
-                         // Only cache successful GET requests for resources not exceeding a size limit
-                         if (event.request.method === 'GET' && networkResponse.status === 200 && networkResponse.type === 'basic') {
-                            // Clone the response because it's a stream and can only be consumed once
-                            cache.put(event.request, networkResponse.clone());
-                         }
-                         return networkResponse;
-                    });
-                }).catch((error) => {
-                    // This catch is for when network fetch fails (i.e., user is offline)
-                    console.error('[Service Worker] Fetch failed; returning fallback:', error);
-                    // Since this is a utility app, we return null or a basic fallback page if needed
-                    // For single-page app, the index.html fallback is already covered by cache-first strategy.
-                });
-            })
     );
 });
