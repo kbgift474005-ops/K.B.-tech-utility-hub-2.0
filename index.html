@@ -1,1 +1,3049 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>All-in-One Calculator App</title>
+    <link rel="manifest" href="/manifest.json">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+    <style>
+        /* Custom Tailwind Configuration for smooth transitions and dark mode */
+        :root {
+            --primary-color: #3b82f6; /* Primary Buttons, Accent */
+            --primary-bg: #1f2937; /* Tool Card BG, Header BG */
+            --secondary-bg: #111827; /* App Background, Side Menu BG */
+            --text-color: #f3f4f6; /* General Text */
+            --input-bg: #374151; /* Input Field BG */
+            --secondary-btn-bg: #4b5563; /* Number/Function Buttons BG */
+            --success-color: #10b981; /* Success/Normal Status Green */
+            --error-color: #ef4444; /* Error/Obesity Status Red */
+            /* Priority Colors (New) */
+            --priority-high: #ef4444; /* Red */
+            --priority-medium: #f59e0b; /* Amber */
+            --priority-low: #3b82f6; /* Primary Blue */
+        }
+
+        .dark {
+            background-color: var(--secondary-bg);
+            color: var(--text-color); 
+        }
+        
+        body {
+            color: var(--text-color); 
+        }
+        
+        /* Apply Custom Colors */
+        .bg-primary { background-color: var(--primary-color) !important; }
+        .text-primary { color: var(--primary-color) !important; }
+        .bg-secondary-btn { background-color: var(--secondary-btn-bg) !important; }
+        .bg-input-field { background-color: var(--input-bg) !important; }
+
+        .calc-button {
+            transition: all 0.1s ease-in-out;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+            border-radius: 1rem;
+            min-height: 3.5rem;
+        }
+
+        .calc-button:active {
+            transform: translateY(1px);
+            box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* --- CALCULATOR DESIGN STYLES --- */
+        
+        /* Minimalist: Removes shadow, uses lighter colors/borders */
+        .design-Minimalist .calc-button {
+            box-shadow: none !important;
+            border-radius: 0.5rem;
+            border: 1px solid var(--secondary-btn-bg);
+            background-color: transparent !important;
+            color: var(--text-color) !important;
+        }
+        .design-Minimalist .operator-btn,
+        .design-Minimalist .equal-btn {
+             color: var(--primary-color) !important;
+             background-color: transparent !important;
+             border: 2px solid var(--primary-color) !important;
+        }
+
+        /* Rounded: Increases border radius (already 1rem, keeping standard here) */
+        .design-Rounded .calc-button {
+            border-radius: 9999px; /* Full circle */
+            box-shadow: 0 6px 8px -2px rgba(0, 0, 0, 0.3);
+        }
+        
+        /* Grid: Minimal radius, flat look */
+        .design-Grid .calc-button {
+            box-shadow: none !important;
+            border-radius: 0;
+            border: 1px solid var(--secondary-bg); /* Use app background to create grid lines */
+        }
+
+        /* Flat: Slightly less radius, removes shadow */
+        .design-Flat .calc-button {
+            box-shadow: none !important;
+            border-radius: 0.5rem;
+            border: none;
+        }
+        
+        /* Slide-out Menu Animation */
+        #slide-menu {
+            transition: transform 0.3s ease-in-out;
+            transform: translateX(-100%);
+            z-index: 50;
+        }
+        #slide-menu.open {
+            transform: translateX(0);
+        }
+        
+        /* Backdrop for menu */
+        #menu-backdrop {
+            transition: opacity 0.3s ease-in-out;
+            opacity: 0;
+            pointer-events: none;
+        }
+        #slide-menu.open + #menu-backdrop {
+            opacity: 0.7;
+            pointer-events: auto;
+        }
+        
+        /* --- Settings Modal Slide-in (Right) --- */
+        #settings-modal-content {
+            transition: transform 0.3s ease-in-out;
+            transform: translateX(100%); /* Start off-screen right */
+            height: 100vh;
+            max-width: 100%;
+        }
+        #settings-modal.open #settings-modal-content {
+            transform: translateX(0);
+        }
+        #settings-modal {
+            background-color: transparent; /* Backdrop is now handled by a dedicated element */
+            transition: opacity 0.3s ease-in-out;
+        }
+        #settings-modal-backdrop { 
+            transition: opacity 0.3s ease-in-out;
+            opacity: 0;
+            pointer-events: none;
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+        #settings-modal.open #settings-modal-backdrop {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        /* --- Custom Theme Modal (Fade/Zoom) --- */
+        #custom-theme-modal {
+            transition: opacity 0.3s ease-out;
+        }
+        #custom-theme-modal:not(.open) {
+             opacity: 0;
+             pointer-events: none;
+        }
+        
+        /* Calendar Styles */
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+        }
+        .day-cell {
+            padding: 8px 4px;
+            text-align: center;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.1s;
+        }
+        .day-cell:hover:not(.day-name) {
+             background-color: var(--input-bg);
+        }
+        .today {
+            background-color: var(--primary-color) !important;
+            color: white;
+            font-weight: bold;
+        }
+        .has-event {
+            /* Dot for event */
+            position: relative;
+        }
+        .has-event::after {
+            content: '';
+            position: absolute;
+            bottom: 2px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: var(--success-color); /* Event indicator color */
+        }
+        .day-cell.selected {
+             background-color: var(--primary-color) !important;
+             color: white;
+        }
+        
+        /* Full screen notepad modal */
+        #add-edit-note-modal {
+             transition: all 0.2s ease-in-out;
+        }
+        #add-edit-note-modal:not(.open) {
+             transform: translateY(100%);
+             opacity: 0;
+             pointer-events: none;
+        }
+        #add-edit-note-modal.open {
+             transform: translateY(0);
+             opacity: 1;
+        }
+        
+        /* EMI Amortization Table Styles */
+        .amortization-table th, .amortization-table td {
+            padding: 8px 4px;
+            text-align: right;
+            border-bottom: 1px solid var(--input-bg);
+            font-size: 0.8rem;
+        }
+        .amortization-table th {
+            text-align: center;
+            background-color: var(--primary-bg);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .amortization-table-container {
+             max-height: 400px;
+             overflow-y: auto;
+        }
+        
+        /* Chart Styles */
+        #emi-chart-container, #sip-chart-container, #bmr-chart-container {
+             max-width: 300px;
+             margin: 0 auto;
+             padding-bottom: 1rem;
+        }
+        
+        /* --- TASK MANAGER STYLES (NEW) --- */
+        .priority-high { color: var(--priority-high); }
+        .priority-medium { color: var(--priority-medium); }
+        .priority-low { color: var(--priority-low); }
+
+        .note-card-task-completed {
+             opacity: 0.5;
+             text-decoration: line-through;
+        }
+        
+        .note-card {
+             border-left: 5px solid;
+             transition: all 0.2s;
+        }
+        
+        .note-card.high { border-left-color: var(--priority-high); }
+        .note-card.medium { border-left-color: var(--priority-medium); }
+        .note-card.low { border-left-color: var(--priority-low); }
+        .note-card.note { border-left-color: var(--text-color); }
+        
+        .filter-active {
+            box-shadow: 0 0 0 3px var(--primary-color) inset;
+        }
+        
+        /* Health Calculator Tabs */
+        .health-tab.active {
+            border-bottom: 3px solid var(--primary-color);
+            color: var(--primary-color) !important;
+            font-weight: bold;
+        }
+        .health-tab {
+            color: var(--text-color);
+            transition: all 0.2s;
+        }
+
+
+    </style>
+</head>
+<body class="dark min-h-screen font-inter">
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        'primary': 'var(--primary-color)',
+                        'primary-bg': 'var(--primary-bg)',
+                        'secondary-btn': 'var(--secondary-btn-bg)',
+                        'input-field': 'var(--input-bg)',
+                        'priority-high': 'var(--priority-high)',
+                        'priority-medium': 'var(--priority-medium)',
+                        'priority-low': 'var(--priority-low)',
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+
+    <script type="module">
+        
+        // --- GLOBAL VARIABLES ---
+        
+        let emiChart = null; // Global variable to hold the Chart.js instance for EMI
+        let sipChart = null; // Global variable to hold the Chart.js instance for SIP
+        let bmrChart = null; // NEW: Global variable for BMR/TDEE chart
+        
+        // NEW: State for Health Calculator Tabs
+        let currentHealthView = 'BMI'; 
+
+        // --- NEW CUSTOM COLOR DEFAULTS ---
+        const defaultCustomColors = {
+            '--secondary-bg': '#111827',     // App background
+            '--primary-color': '#3b82f6',    // Primary Color (Accent/Tab)
+            '--primary-bg': '#1f2937',       // Tool Card BG / Header BG
+            '--input-bg': '#374151',         // Input Field BG
+            '--secondary-btn-bg': '#4b5563', // Secondary Button BG (Numbers)
+            '--success-color': '#10b981',    // Success / Normal Indicator
+            '--error-color': '#ef4444',      // Error / Obesity Indicator
+            // NEW Priority Colors
+            '--priority-high': '#ef4444',
+            '--priority-medium': '#f59e0b',
+            '--priority-low': '#3b82f6',
+        };
+
+        const defaultSettings = {
+            theme: 'Dark Default', 
+            soundTone: 'Tone 1', 
+            soundOn: true,
+            language: 'English', 
+            calcDesign: 'Classic', // Default value
+            customColors: {...defaultCustomColors}, // New field for custom colors
+        };
+
+        const AppState = {
+            currentView: 'Calculator',
+            settings: {...defaultSettings},
+            isMenuOpen: false,
+            isSettingsModalOpen: false,
+            isCustomThemeModalOpen: false, 
+            isAddingUnitOrCurrency: null, 
+            
+            // --- NEW STATES FOR NOTEPAD AND CALENDAR ---
+            notes: [], 
+            events: {}, 
+            currentCalendarDate: new Date(),
+            selectedDayEvents: [],
+            currentEditingNoteId: null,
+            currentSelectedCalendarDate: new Date().toISOString().substring(0, 10),
+            // NEW NOTEPAD STATE
+            currentNoteFilter: 'All', // 'All', 'Task', 'Note', 'Completed', 'Pending'
+        };
+        
+        let nextNoteId = 1;
+        let nextEventId = 1;
+
+        const THEMES = {
+            'Dark Default': {
+                '--primary-bg': '#1f2937', 
+                '--secondary-bg': '#111827', 
+                '--text-color': '#f3f4f6', 
+                '--primary-color': '#3b82f6',
+                '--input-bg': '#374151',
+                '--secondary-btn-bg': '#4b5563',
+                '--success-color': '#10b981',
+                '--error-color': '#ef4444',
+                '--priority-high': '#ef4444',
+                '--priority-medium': '#f59e0b',
+                '--priority-low': '#3b82f6',
+            },
+            'Light Default': {
+                '--primary-bg': '#ffffff', 
+                '--secondary-bg': '#f3f4f6', 
+                '--text-color': '#1f2937', 
+                '--primary-color': '#4c1d95',
+                '--input-bg': '#e5e7eb',
+                '--secondary-btn-bg': '#d1d5db',
+                '--success-color': '#059669',
+                '--error-color': '#dc2626',
+                '--priority-high': '#dc2626',
+                '--priority-medium': '#d97706',
+                '--priority-low': '#4c1d95',
+            },
+            'Blue Dark': {
+                '--primary-bg': '#071832', 
+                '--secondary-bg': '#000c1f', 
+                '--text-color': '#93c5fd', 
+                '--primary-color': '#2563eb',
+                '--input-bg': '#1e3a8a',
+                '--secondary-btn-bg': '#1d4ed8',
+                '--success-color': '#059669',
+                '--error-color': '#dc2626',
+                '--priority-high': '#dc2626',
+                '--priority-medium': '#f97316',
+                '--priority-low': '#2563eb',
+            },
+            'Green Dark': {
+                '--primary-bg': '#143522', 
+                '--secondary-bg': '#0a1d13', 
+                '--text-color': '#a7f3d0', 
+                '--primary-color': '#10b981',
+                '--input-bg': '#064e3b',
+                '--secondary-btn-bg': '#047857',
+                '--success-color': '#4ade80',
+                '--error-color': '#f87171',
+                '--priority-high': '#f87171',
+                '--priority-medium': '#facc15',
+                '--priority-low': '#10b981',
+            },
+            // Custom Theme Entry (Values will be overwritten by settings.customColors)
+            'Custom': {...defaultCustomColors}
+        };
+
+        // --- UI RENDER FUNCTIONS ---
+        function renderView() {
+            // Updated list of views: 'BMI Calculator' -> 'Health Calculator'
+            const views = ['Calculator', 'Unit Converter', 'Health Calculator', 'Currency Converter', 'EMI Calculator', 'SIP Calculator', 'Notepad', 'Calendar'];
+            views.forEach(view => {
+                const element = document.getElementById(`view-${view.replace(/\s/g, '-')}`);
+                if (element) {
+                    element.classList.toggle('hidden', AppState.currentView !== view);
+                }
+            });
+            document.getElementById('current-view-title').textContent = AppState.currentView;
+            
+            if (AppState.currentView === 'Calculator') {
+                 applyCalcDesign(AppState.settings.calcDesign);
+            }
+            
+            if (AppState.currentView === 'Notepad') {
+                renderNotes();
+            } else if (AppState.currentView === 'Calendar') {
+                 renderCalendar();
+            } else if (AppState.currentView === 'EMI Calculator') {
+                handleEMIConvert();
+            } else if (AppState.currentView === 'SIP Calculator') {
+                handleSIPCalculate();
+            } else if (AppState.currentView === 'Health Calculator') {
+                 // Initialize the correct health sub-view
+                 showHealthView(currentHealthView);
+            }
+        }
+        
+        // NEW: Function to switch Health Calculator Tabs
+        function showHealthView(view) {
+            currentHealthView = view;
+            document.getElementById('health-bmi-content').classList.toggle('hidden', view !== 'BMI');
+            document.getElementById('health-bmr-content').classList.toggle('hidden', view !== 'BMR');
+
+            document.getElementById('tab-bmi').classList.toggle('active', view === 'BMI');
+            document.getElementById('tab-bmr').classList.toggle('active', view === 'BMR');
+            
+            // Re-calculate/render when switching views
+            if (view === 'BMI') {
+                calculateBMI();
+            } else if (view === 'BMR') {
+                calculateBMR();
+            }
+        }
+
+
+        function toggleMenu() {
+            AppState.isMenuOpen = !AppState.isMenuOpen;
+            const menu = document.getElementById('slide-menu');
+            const backdrop = document.getElementById('menu-backdrop');
+            menu.classList.toggle('open', AppState.isMenuOpen);
+            backdrop.classList.toggle('opacity-0', !AppState.isMenuOpen);
+            backdrop.classList.toggle('pointer-events-none', !AppState.isMenuOpen);
+        }
+
+        function toggleSettingsModal(open) {
+            AppState.isSettingsModalOpen = open;
+            const modal = document.getElementById('settings-modal');
+            modal.classList.toggle('hidden', !open && !AppState.isCustomThemeModalOpen); 
+            modal.classList.toggle('open', open);
+            
+            if (open) {
+                updateCustomThemeButtonState();
+            }
+        }
+        
+        function toggleCustomThemeModal(open) {
+            AppState.isCustomThemeModalOpen = open;
+            const modal = document.getElementById('custom-theme-modal');
+            modal.classList.toggle('open', open);
+
+            if (open) {
+                 Object.keys(AppState.settings.customColors).forEach(key => {
+                    const inputEl = document.getElementById(`custom-color-${key.substring(2).replace(/-/g, '_')}`);
+                    if (inputEl) inputEl.value = AppState.settings.customColors[key];
+                });
+            }
+            
+            if (!open && !AppState.isSettingsModalOpen) {
+                document.getElementById('settings-modal').classList.add('hidden');
+            }
+        }
+
+
+        function updateCustomThemeButtonState() {
+            const themeSelect = document.getElementById('setting-theme');
+            const customBtn = document.getElementById('customize-theme-btn');
+            const isCustom = themeSelect.value === 'Custom';
+            
+            if (customBtn) {
+                customBtn.disabled = !isCustom;
+                customBtn.classList.toggle('opacity-50', !isCustom);
+                customBtn.classList.toggle('cursor-not-allowed', !isCustom);
+            }
+        }
+
+
+        function applyTheme(settings) {
+            let colors;
+            
+            if (settings.theme === 'Custom') {
+                colors = {...settings.customColors};
+            } else if (THEMES[settings.theme]) {
+                colors = THEMES[settings.theme];
+            } else {
+                settings.theme = 'Dark Default';
+                colors = THEMES['Dark Default'];
+            }
+            
+            Object.keys(colors).forEach(key => {
+                document.documentElement.style.setProperty(key, colors[key]);
+            });
+            
+            if (settings.theme === 'Light Default' || (settings.theme === 'Custom' && colors['--secondary-bg'] && isLightColor(colors['--secondary-bg']))) {
+                document.body.classList.remove('dark');
+            } else {
+                document.body.classList.add('dark');
+            }
+
+            ['theme', 'soundTone', 'language', 'calcDesign'].forEach(key => {
+                const el = document.getElementById(`setting-${key}`);
+                if (el) el.value = settings[key];
+            });
+
+            const soundToggle = document.getElementById('setting-soundOn');
+            if (soundToggle) soundToggle.checked = settings.soundOn;
+            
+            updateCustomThemeButtonState();
+            
+            applyCalcDesign(settings.calcDesign);
+        }
+        
+        function applyCalcDesign(design) {
+            const container = document.getElementById('view-Calculator');
+            if (!container) return;
+
+            ['design-Classic', 'design-Rounded', 'design-Minimalist', 'design-Grid', 'design-Flat'].forEach(cls => {
+                container.classList.remove(cls);
+            });
+            
+            if (design !== 'Classic') {
+                container.classList.add(`design-${design}`);
+            }
+        }
+        
+        function isLightColor(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            if (!result) return false;
+            const r = parseInt(result[1], 16);
+            const g = parseInt(result[2], 16);
+            const b = parseInt(result[3], 16);
+            const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+            return luminance > 0.5;
+        }
+
+
+        // --- SOUND LOGIC (Simulated) ---
+        function playClickSound() {
+            if (AppState.settings.soundOn) {
+                const tone = AppState.settings.soundTone;
+                const volume = 0.5;
+                let frequency = 440; 
+                
+                switch(tone) {
+                    case 'Tone 2': frequency = 523; break; 
+                    case 'Tone 3': frequency = 659; break; 
+                    case 'Tone 4': frequency = 784; break; 
+                    case 'Tone 5': frequency = 880; break; 
+                }
+                
+                try {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    const audioContext = new AudioContext();
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+
+                    oscillator.type = 'sine';
+                    oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+                    gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+
+                    oscillator.start();
+                    oscillator.stop(audioContext.currentTime + 0.05); 
+
+                } catch (e) {
+                    console.error('Audio playback failed:', e);
+                }
+            }
+        }
+
+
+        // --- LOCAL STORAGE & SETTINGS LOGIC (Replaces Firebase) ---
+        const LOCAL_STORAGE_KEY = 'calc_app_user_settings';
+        const CUSTOM_UNITS_KEY = 'calc_app_custom_units';
+        const CUSTOM_CURRENCIES_KEY = 'calc_app_custom_currencies';
+        const NOTES_KEY = 'calc_app_notes';
+        const EVENTS_KEY = 'calc_app_events';
+        
+        function loadSettingsFromLocal() {
+            try {
+                const storedSettings = localStorage.getItem(LOCAL_STORAGE_KEY);
+                if (storedSettings) {
+                    const loaded = JSON.parse(storedSettings);
+                    AppState.settings = {...defaultSettings, ...loaded, 
+                        customColors: {...defaultCustomColors, ...(loaded.customColors || {})}
+                    };
+                } else {
+                    AppState.settings = {...defaultSettings};
+                }
+                
+                const storedNotes = localStorage.getItem(NOTES_KEY);
+                if (storedNotes) {
+                    AppState.notes = JSON.parse(storedNotes);
+                    if (AppState.notes.length > 0) {
+                         nextNoteId = Math.max(...AppState.notes.map(n => n.id)) + 1;
+                    }
+                }
+                
+                const storedEvents = localStorage.getItem(EVENTS_KEY);
+                if (storedEvents) {
+                    AppState.events = JSON.parse(storedEvents);
+                    let maxEventId = 0;
+                    Object.values(AppState.events).flat().forEach(e => {
+                        if (e.id > maxEventId) maxEventId = e.id;
+                    });
+                    nextEventId = maxEventId + 1;
+                }
+
+            } catch (e) {
+                console.error("Error loading settings/data from Local Storage:", e);
+                AppState.settings = {...defaultSettings};
+            }
+            applyTheme(AppState.settings);
+            renderView();
+        }
+
+        function saveSettingsToLocal() {
+            try {
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(AppState.settings));
+                playClickSound(); 
+            } catch (e) {
+                console.error("Error saving settings to Local Storage:", e);
+            }
+        }
+        
+        function saveAppDataToLocal() {
+            try {
+                localStorage.setItem(NOTES_KEY, JSON.stringify(AppState.notes));
+                localStorage.setItem(EVENTS_KEY, JSON.stringify(AppState.events));
+            } catch (e) {
+                 console.error("Error saving app data to Local Storage:", e);
+            }
+        }
+        
+        async function saveSetting(key, value) {
+            AppState.settings[key] = value;
+            applyTheme(AppState.settings); 
+            saveSettingsToLocal();
+        }
+
+        function initApp() {
+            loadSettingsFromLocal();
+            document.getElementById('user-id-display').textContent = 'User ID: Local Mode'; 
+        }
+        
+        function handleCustomThemeSave() {
+            playClickSound();
+            const newColors = {};
+            const keys = Object.keys(defaultCustomColors);
+            
+            let isThemeChanged = false;
+            keys.forEach(key => {
+                const inputId = `custom-color-${key.substring(2).replace(/-/g, '_')}`;
+                const inputEl = document.getElementById(inputId);
+                
+                if (inputEl) {
+                    const newValue = inputEl.value;
+                    newColors[key] = newValue;
+                    if (AppState.settings.customColors[key] !== newValue) {
+                        isThemeChanged = true;
+                    }
+                }
+            });
+
+            if (isThemeChanged) {
+                AppState.settings.customColors = newColors;
+                applyTheme(AppState.settings);
+                saveSettingsToLocal();
+                alertMessage('Theme Saved', 'Custom colors successfully applied and saved.', 'green-500');
+            }
+            
+            toggleCustomThemeModal(false);
+        }
+
+        // --- CALCULATOR LOGIC (Unchanged) ---
+        const calcState = {
+            display: '0',
+            currentOperator: null,
+            operand1: null,
+            waitingForSecondOperand: false,
+            isScientific: false
+        };
+
+        function updateDisplay() {
+            document.getElementById('calc-display').textContent = calcState.display;
+        }
+
+        function inputDigit(digit) {
+            playClickSound();
+            if (calcState.waitingForSecondOperand) {
+                calcState.display = digit;
+                calcState.waitingForSecondOperand = false;
+            } else {
+                calcState.display = calcState.display === '0' ? digit : calcState.display + digit;
+            }
+            updateDisplay();
+        }
+
+        function handleOperator(nextOperator) {
+            playClickSound();
+            const inputValue = parseFloat(calcState.display);
+
+            if (calcState.currentOperator && calcState.waitingForSecondOperand) {
+                calcState.currentOperator = nextOperator;
+                return;
+            }
+
+            if (calcState.operand1 === null) {
+                calcState.operand1 = inputValue;
+            } else if (calcState.currentOperator) {
+                const result = performCalculation[calcState.currentOperator](calcState.operand1, inputValue);
+                calcState.display = String(result);
+                calcState.operand1 = result;
+            }
+
+            calcState.waitingForSecondOperand = true;
+            calcState.currentOperator = nextOperator;
+            updateDisplay();
+        }
+
+        const performCalculation = {
+            '/': (firstOperand, secondOperand) => firstOperand / secondOperand,
+            '*': (firstOperand, secondOperand) => firstOperand * secondOperand,
+            '+': (firstOperand, secondOperand) => firstOperand + secondOperand,
+            '-': (firstOperand, secondOperand) => firstOperand - secondOperand,
+            '=': (firstOperand, secondOperand) => secondOperand
+        };
+
+        function calculateScientific(func) {
+             playClickSound();
+             const inputValue = parseFloat(calcState.display);
+             let result;
+             
+             switch(func) {
+                 case 'sin': result = Math.sin(inputValue * Math.PI / 180); break;
+                 case 'cos': result = Math.cos(inputValue * Math.PI / 180); break;
+                 case 'tan': result = Math.tan(inputValue * Math.PI / 180); break;
+                 case 'log': result = Math.log10(inputValue); break;
+                 case 'sqrt': result = Math.sqrt(inputValue); break;
+                 case '^2': result = inputValue * inputValue; break;
+                 case 'pi': result = Math.PI; break;
+                 case 'e': result = Math.E; break;
+                 case 'abs': result = Math.abs(inputValue); break;
+                 case 'fac': result = factorial(inputValue); break;
+                 default: return;
+             }
+             
+             calcState.display = String(result.toFixed(5));
+             calcState.operand1 = result;
+             calcState.waitingForSecondOperand = true;
+             updateDisplay();
+        }
+        
+        function factorial(n) {
+            if (n < 0) return NaN;
+            if (n === 0) return 1;
+            let result = 1;
+            for (let i = 2; i <= n; i++) {
+                result *= i;
+            }
+            return result;
+        }
+
+        function resetCalculator() {
+            playClickSound();
+            calcState.display = '0';
+            calcState.currentOperator = null;
+            calcState.operand1 = null;
+            calcState.waitingForSecondOperand = false;
+            updateDisplay();
+        }
+
+        function toggleScientific() {
+            playClickSound();
+            calcState.isScientific = !calcState.isScientific;
+            document.getElementById('scientific-keys').classList.toggle('hidden', !calcState.isScientific);
+            document.getElementById('scientific-toggle-icon').innerHTML = lucide.createIcons()[calcState.isScientific ? 'cpu' : 'calculator'].toSvg({ class: 'w-6 h-6' });
+        }
+
+        // --- UNIT CONVERTER LOGIC (Unchanged) ---
+        
+        function toBase(val, unit, conversionMap) {
+            const factor = conversionMap[unit];
+            return val * factor;
+        }
+
+        function fromBase(baseVal, unit, conversionMap) {
+            const factor = conversionMap[unit];
+            return baseVal / factor;
+        }
+
+        const baseUnitConversions = {
+            Length: {
+                units: ['Meter (m)', 'Kilometer (km)', 'Centimeter (cm)', 'Mile (mi)', 'Foot (ft)', 'Inch (in)', 'Nautical Mile', 'Yard', 'Furlong', 'Bigha (UP)'],
+                base: 'Meter (m)',
+                map: { 
+                    'Meter (m)': 1, 'Kilometer (km)': 1000, 'Centimeter (cm)': 0.01, 'Mile (mi)': 1609.344, 'Foot (ft)': 0.3048, 
+                    'Inch (in)': 0.0254, 'Nautical Mile': 1852, 'Yard': 0.9144, 'Furlong': 201.168, 'Bigha (UP)': 2529.28 
+                }
+            },
+            Temperature: { // Special case, uses functions (Base: Kelvin)
+                units: ['Celsius (°C)', 'Fahrenheit (°F)', 'Kelvin (K)', 'Rankine (°R)'],
+                toBase: (val, unit) => {
+                    if (unit === 'Celsius (°C)') return val + 273.15;
+                    if (unit === 'Fahrenheit (°F)') return (val - 32) * 5/9 + 273.15;
+                    if (unit === 'Rankine (°R)') return val * 5/9;
+                    return val; // Kelvin
+                },
+                fromBase: (val, unit) => {
+                    if (unit === 'Celsius (°C)') return val - 273.15;
+                    if (unit === 'Fahrenheit (°F)') return (val - 273.15) * 9/5 + 32;
+                    if (unit === 'Rankine (°R)') return val * 9/5;
+                    return val; // Kelvin
+                }
+            },
+            Time: {
+                units: ['Second (s)', 'Minute (min)', 'Hour (h)', 'Day', 'Week', 'Year', 'Millisecond (ms)', 'Microsecond (µs)'],
+                base: 'Second (s)',
+                map: { 
+                    'Second (s)': 1, 'Minute (min)': 60, 'Hour (h)': 3600, 'Day': 86400, 'Week': 604800, 'Year': 31536000,
+                    'Millisecond (ms)': 0.001, 'Microsecond (µs)': 0.000001
+                }
+            },
+            Mass: { 
+                units: ['Kilogram (kg)', 'Gram (g)', 'Pound (lb)', 'Tonne (t)', 'Ounce (oz)', 'Milligram (mg)', 'Carat', 'Slug'],
+                base: 'Kilogram (kg)',
+                map: { 
+                    'Kilogram (kg)': 1, 'Gram (g)': 0.001, 'Pound (lb)': 0.453592, 'Tonne (t)': 1000, 'Ounce (oz)': 0.0283495,
+                    'Milligram (mg)': 0.000001, 'Carat': 0.0002, 'Slug': 14.5939
+                }
+            },
+            Area: {
+                units: ['Square Meter (m²)', 'Square Kilometer (km²)', 'Acre', 'Hectare', 'Square Mile (mi²)', 'Square Foot (ft²)', 'Are', 'Guntha (India)'],
+                base: 'Square Meter (m²)',
+                map: { 
+                    'Square Meter (m²)': 1, 'Square Kilometer (km²)': 1000000, 'Acre': 4046.86, 'Hectare': 10000, 'Square Mile (mi²)': 2589988.11,
+                    'Square Foot (ft²)': 0.092903, 'Are': 100, 'Guntha (India)': 101.171
+                }
+            },
+            Volume: {
+                units: ['Cubic Meter (m³)', 'Litre (L)', 'Gallon (US)', 'Cubic Foot (ft³)', 'Millilitre (ml)', 'Barrel (Oil)', 'Teaspoon (US)'],
+                base: 'Cubic Meter (m³)',
+                map: { 
+                    'Cubic Meter (m³)': 1, 'Litre (L)': 0.001, 'Gallon (US)': 0.00378541, 'Cubic Foot (ft³)': 0.0283168, 
+                    'Millilitre (ml)': 0.000001, 'Barrel (Oil)': 0.158987, 'Teaspoon (US)': 0.00000492892
+                }
+            },
+            Speed: {
+                units: ['m/s', 'km/h', 'mph', 'knot', 'ft/s', 'Mach (at sea level)'],
+                base: 'm/s',
+                map: { 'm/s': 1, 'km/h': 1 / 3.6, 'mph': 0.44704, 'knot': 0.514444, 'ft/s': 0.3048, 'Mach (at sea level)': 340.29 }
+            },
+            Pressure: {
+                units: ['Pascal (Pa)', 'Bar', 'Atmosphere (atm)', 'PSI', 'kPa', 'Torr', 'mm Hg'],
+                base: 'Pascal (Pa)',
+                map: { 
+                    'Pascal (Pa)': 1, 'Bar': 100000, 'Atmosphere (atm)': 101325, 'PSI': 6894.76, 'kPa': 1000,
+                    'Torr': 133.322, 'mm Hg': 133.322
+                }
+            },
+            Energy: {
+                units: ['Joule (J)', 'Kilojoule (kJ)', 'Calorie (cal)', 'Kilowatt-hour (kWh)', 'Electronvolt (eV)', 'BTU', 'Erg'],
+                base: 'Joule (J)',
+                map: { 
+                    'Joule (J)': 1, 'Kilojoule (kJ)': 1000, 'Calorie (cal)': 4.184, 'Kilowatt-hour (kWh)': 3600000, 
+                    'Electronvolt (eV)': 1.60218e-19, 'BTU': 1055.06, 'Erg': 1e-7 
+                }
+            },
+            Power: {
+                units: ['Watt (W)', 'Kilowatt (kW)', 'Horsepower (hp)', 'BTU/h', 'Foot-Pound/second'],
+                base: 'Watt (W)',
+                map: { 
+                    'Watt (W)': 1, 'Kilowatt (kW)': 1000, 'Horsepower (hp)': 745.7, 'BTU/h': 0.293071,
+                    'Foot-Pound/second': 1.35582
+                }
+            },
+            Data: { // Data Storage
+                units: ['Bit', 'Byte (B)', 'Kilobyte (KB)', 'Megabyte (MB)', 'Gigabyte (GB)', 'Terabyte (TB)', 'Petabyte (PB)'],
+                base: 'Bit',
+                map: { 
+                    'Bit': 1, 'Byte (B)': 8, 'Kilobyte (KB)': 8192, 'Megabyte (MB)': 8388608, 'Gigabyte (GB)': 8589934592, 
+                    'Terabyte (TB)': 8796093022000, 'Petabyte (PB)': 9007199254740992 
+                }
+            },
+            FuelConsumption: {
+                units: ['Litre/100 km', 'km/L', 'Miles/Gallon (US)', 'Miles/Gallon (Imperial)'],
+                base: 'Litre/100 km',
+                
+                toBase: (val, unit) => {
+                    if (unit === 'Litre/100 km') return val;
+                    if (unit === 'km/L') return 100 / val;
+                    if (unit === 'Miles/Gallon (US)') return 235.214 / val; 
+                    if (unit === 'Miles/Gallon (Imperial)') return 282.481 / val;
+                    return val; 
+                },
+                
+                fromBase: (baseVal, unit) => {
+                    if (unit === 'Litre/100 km') return baseVal;
+                    if (unit === 'km/L') return 100 / baseVal;
+                    if (unit === 'Miles/Gallon (US)') return 235.214 / baseVal;
+                    if (unit === 'Miles/Gallon (Imperial)') return 282.481 / baseVal;
+                    return baseVal; 
+                }
+            }
+        };
+        
+        function getUnitConversions() {
+             const allConversions = JSON.parse(JSON.stringify(baseUnitConversions)); 
+             const customUnits = loadCustomItems(CUSTOM_UNITS_KEY);
+             
+             if (Object.keys(customUnits).length > 0) {
+                 for (const unitName in customUnits) {
+                     const { factor, category } = customUnits[unitName];
+                     const isRegular = allConversions[category] && category !== 'Temperature' && category !== 'FuelConsumption';
+                     
+                     if (isRegular) {
+                         const map = allConversions[category].map;
+                         const units = allConversions[category].units;
+                         
+                         if (!map[unitName]) {
+                             map[unitName] = factor;
+                             units.push(unitName);
+                         }
+                     } else if (category && (category === 'Temperature' || category === 'FuelConsumption')) {
+                         console.warn(`Custom unit "${unitName}" cannot be added to the ${category} category (Special logic required).`);
+                     } else if (category) {
+                         console.warn(`Custom unit "${unitName}" specifies an invalid category "${category}".`);
+                     }
+                 }
+             }
+             return allConversions;
+        }
+
+
+        function handleUnitConvert() {
+            const category = document.getElementById('unit-category').value;
+            const fromUnit = document.getElementById('unit-from').value;
+            const toUnit = document.getElementById('unit-to').value;
+            const value = parseFloat(document.getElementById('unit-input').value);
+            const resultDisplay = document.getElementById('unit-result');
+            
+            const unitConversions = getUnitConversions();
+
+            if (isNaN(value) || !category || !fromUnit || !toUnit || value < 0) {
+                resultDisplay.textContent = 'Result: Invalid Input';
+                return;
+            }
+
+            const converter = unitConversions[category];
+            if (!converter) {
+                resultDisplay.textContent = 'Result: Category Not Supported';
+                return;
+            }
+            
+            let result;
+
+            if (category === 'Temperature' || category === 'FuelConsumption') {
+                const baseVal = converter.toBase(value, fromUnit);
+                if (baseVal === 0 && (toUnit === 'km/L' || toUnit === 'Miles/Gallon (US)' || toUnit === 'Miles/Gallon (Imperial)')) {
+                     result = Infinity;
+                } else {
+                     result = converter.fromBase(baseVal, toUnit);
+                }
+            } else {
+                const baseVal = toBase(value, fromUnit, converter.map); 
+                result = fromBase(baseVal, toUnit, converter.map); 
+            }
+            
+            const formattedResult = isFinite(result) ? result.toPrecision(6) : '∞ (Infinite Efficiency)';
+            resultDisplay.textContent = `Result: ${formattedResult}`;
+        }
+
+        function populateUnitDropdowns() {
+            const categoryEl = document.getElementById('unit-category');
+            const fromEl = document.getElementById('unit-from');
+            const toEl = document.getElementById('unit-to');
+            const unitConversions = getUnitConversions(); 
+
+            categoryEl.innerHTML = '';
+            Object.keys(unitConversions).forEach(cat => {
+                const opt = document.createElement('option');
+                opt.value = cat;
+                opt.textContent = cat;
+                categoryEl.appendChild(opt);
+            });
+
+            const oldCategoryEl = categoryEl.cloneNode(true);
+            categoryEl.parentNode.replaceChild(oldCategoryEl, categoryEl);
+            const newCategoryEl = document.getElementById('unit-category');
+
+            newCategoryEl.addEventListener('change', (e) => {
+                const selectedCat = e.target.value;
+                const units = unitConversions[selectedCat]?.units || [];
+
+                fromEl.innerHTML = '';
+                toEl.innerHTML = '';
+
+                units.forEach(unit => {
+                    const opt1 = document.createElement('option');
+                    opt1.value = unit;
+                    opt1.textContent = unit;
+                    fromEl.appendChild(opt1);
+
+                    const opt2 = document.createElement('option');
+                    opt2.value = unit;
+                    opt2.textContent = unit;
+                    toEl.appendChild(opt2);
+                });
+                handleUnitConvert();
+            });
+
+            newCategoryEl.value = 'Length';
+            newCategoryEl.dispatchEvent(new Event('change'));
+            
+            document.getElementById('unit-input').addEventListener('input', handleUnitConvert);
+            fromEl.addEventListener('change', handleUnitConvert);
+            toEl.addEventListener('change', handleUnitConvert);
+        }
+
+        function simulateAddUnit() {
+            openAddItemModal('Unit');
+        }
+        
+        // --- BMI LOGIC (UPDATED) ---
+        function calculateBMI() {
+            // BMI is gender-neutral (Weight / Height^2), but status text is updated to reflect selection.
+            const weightKg = parseFloat(document.getElementById('bmi-weight').value);
+            const heightCm = parseFloat(document.getElementById('bmi-height').value);
+            const gender = document.getElementById('bmi-gender').value; // Get Gender
+            const heightM = heightCm / 100;
+
+            const resultDisplay = document.getElementById('bmi-result');
+            const statusDisplay = document.getElementById('bmi-status');
+            const rangeDisplay = document.getElementById('bmi-range');
+
+            if (isNaN(weightKg) || isNaN(heightCm) || heightCm <= 0 || weightKg <= 0 || !gender) {
+                resultDisplay.textContent = 'Please enter valid inputs.';
+                statusDisplay.textContent = '';
+                rangeDisplay.textContent = '';
+                return;
+            }
+
+            const bmi = weightKg / (heightM * heightM);
+            const formattedBmi = bmi.toFixed(2);
+            resultDisplay.textContent = `Your BMI: ${formattedBmi}`;
+
+            let status = '';
+            let color = '';
+            const successColor = AppState.settings.customColors['--success-color'] || defaultCustomColors['--success-color'];
+            const errorColor = AppState.settings.customColors['--error-color'] || defaultCustomColors['--error-color'];
+            
+            // Standard WHO categories are used, but gender is added to the status display.
+            if (bmi < 18.5) {
+                status = 'Underweight';
+                color = `style="color: ${errorColor};"`;
+            } else if (bmi >= 18.5 && bmi <= 24.9) {
+                status = 'Normal Weight';
+                color = `style="color: ${successColor};"`;
+            } else if (bmi >= 25 && bmi <= 29.9) {
+                status = 'Overweight';
+                color = `style="color: ${errorColor}; opacity: 0.8;"`;
+            } else {
+                status = 'Obesity';
+                color = `style="color: ${errorColor};"`;
+            }
+            statusDisplay.innerHTML = `<span ${color}>${status} (${gender})</span>`; // Display gender in status
+
+            const minWeight = 18.5 * heightM * heightM;
+            const maxWeight = 24.9 * heightM * heightM;
+
+            rangeDisplay.textContent = `Normal weight range for your height: ${minWeight.toFixed(1)} kg - ${maxWeight.toFixed(1)} kg`;
+        }
+        
+        // --- BMR/TDEE LOGIC (UNTOUCHED) ---
+        
+        function calculateBMR() {
+            const gender = document.getElementById('bmr-gender').value;
+            const weightKg = parseFloat(document.getElementById('bmr-weight').value);
+            const heightCm = parseFloat(document.getElementById('bmr-height').value);
+            const age = parseFloat(document.getElementById('bmr-age').value);
+            const activityLevel = parseFloat(document.getElementById('bmr-activity').value);
+            const goal = document.getElementById('bmr-goal').value;
+            const proteinPercent = parseFloat(document.getElementById('bmr-protein').value);
+            const fatPercent = parseFloat(document.getElementById('bmr-fat').value);
+            const carbsPercent = 100 - proteinPercent - fatPercent;
+
+            const bmrResultEl = document.getElementById('bmr-result');
+            const tdeeResultEl = document.getElementById('tdee-result');
+            const goalCalorieEl = document.getElementById('goal-calorie-result');
+            const macroResultEl = document.getElementById('macro-result');
+            
+            document.getElementById('bmr-carbs').value = carbsPercent.toFixed(1); // Update visible carb percent
+
+            if (isNaN(weightKg) || isNaN(heightCm) || isNaN(age) || isNaN(activityLevel) || weightKg <= 0 || heightCm <= 0 || age <= 0 || !gender || !goal) {
+                bmrResultEl.textContent = 'BMR: Invalid Input';
+                tdeeResultEl.textContent = 'TDEE: ---';
+                goalCalorieEl.textContent = 'Goal: ---';
+                macroResultEl.innerHTML = '';
+                if (bmrChart) bmrChart.destroy();
+                return;
+            }
+            
+            // 1. Calculate BMR (Mifflin-St Jeor Formula)
+            let bmr;
+            if (gender === 'Male') {
+                 bmr = (10 * weightKg) + (6.25 * heightCm) - (5 * age) + 5;
+            } else { // Female
+                 bmr = (10 * weightKg) + (6.25 * heightCm) - (5 * age) - 161;
+            }
+            
+            // 2. Calculate TDEE (Total Daily Energy Expenditure)
+            const tdee = bmr * activityLevel;
+            
+            // 3. Calculate Goal Calories
+            let goalCalories = tdee;
+            let goalStatus = 'Maintenance';
+            
+            if (goal === 'Loss') {
+                // Safe deficit of 500 calories per day
+                goalCalories = tdee - 500;
+                goalStatus = 'Weight Loss';
+            } else if (goal === 'Gain') {
+                // Surplus of 250-300 calories per day
+                goalCalories = tdee + 300;
+                goalStatus = 'Weight Gain';
+            }
+            
+            // Ensure goal calories doesn't fall below BMR
+            goalCalories = Math.max(goalCalories, bmr); 
+            
+            // 4. Calculate Macros
+            const proteinCal = goalCalories * (proteinPercent / 100);
+            const fatCal = goalCalories * (fatPercent / 100);
+            const carbsCal = goalCalories * (carbsPercent / 100);
+            
+            const proteinGrams = (proteinCal / 4).toFixed(1);
+            const fatGrams = (fatCal / 9).toFixed(1);
+            const carbsGrams = (carbsCal / 4).toFixed(1);
+
+
+            bmrResultEl.textContent = `BMR (Resting): ${bmr.toFixed(0)} kcal`;
+            tdeeResultEl.textContent = `TDEE (Active): ${tdee.toFixed(0)} kcal`;
+            goalCalorieEl.textContent = `Goal: ${goalCalories.toFixed(0)} kcal (${goalStatus})`;
+
+            macroResultEl.innerHTML = `
+                <p class="font-semibold mt-3">Macro Breakdown (Grams):</p>
+                <div class="flex justify-around text-center mt-2 text-sm">
+                    <div class="text-primary">Protein: ${proteinGrams}g</div>
+                    <div class="text-success-color">Carbs: ${carbsGrams}g</div>
+                    <div class="text-error-color">Fat: ${fatGrams}g</div>
+                </div>
+            `;
+            
+            renderBMRChart(bmr, tdee, goalCalories);
+        }
+        
+        function updateCarbsPercentage() {
+             const proteinPercent = parseFloat(document.getElementById('bmr-protein').value);
+             const fatPercent = parseFloat(document.getElementById('bmr-fat').value);
+             const carbsPercent = 100 - proteinPercent - fatPercent;
+             
+             document.getElementById('bmr-carbs').value = carbsPercent.toFixed(1);
+             
+             // Recalculate BMR/TDEE immediately
+             calculateBMR();
+        }
+        
+        function renderBMRChart(bmr, tdee, goalCalories) {
+            const ctx = document.getElementById('bmr-bar-chart');
+            
+            if (bmrChart) {
+                bmrChart.destroy();
+            }
+            
+            const primaryColor = AppState.settings.customColors['--primary-color'] || defaultCustomColors['--primary-color'];
+            const successColor = AppState.settings.customColors['--success-color'] || defaultCustomColors['--success-color'];
+            const errorColor = AppState.settings.customColors['--error-color'] || defaultCustomColors['--error-color'];
+            
+            bmrChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['BMR (Resting)', 'TDEE (Active)', 'Goal Calories'],
+                    datasets: [{
+                        label: 'Calories (kcal)',
+                        data: [bmr.toFixed(0), tdee.toFixed(0), goalCalories.toFixed(0)],
+                        backgroundColor: [
+                            primaryColor,
+                            successColor,
+                            errorColor 
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: false,
+                        },
+                        title: {
+                            display: true,
+                            text: 'Energy Expenditure Breakdown',
+                            color: 'var(--text-color)'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { color: 'var(--text-color)' }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: 'var(--text-color)' }
+                        }
+                    }
+                }
+            });
+        }
+
+
+        // --- CURRENCY CONVERTER LOGIC (UNTOUCHED) ---
+        const baseExchangeRates = {
+            'USD - US Dollar': 1.00,
+            'EUR - Euro': 0.92,
+            'JPY - Japanese Yen': 156.40,
+            'GBP - British Pound': 0.79,
+            'CAD - Canadian Dollar': 1.36,
+            'AUD - Australian Dollar': 1.51,
+            'INR - Indian Rupee': 83.50,
+            'PKR - Pakistani Rupee': 278.00,
+            'BDT - Bangladeshi Taka': 110.00,
+            'AED - UAE Dirham': 3.67,
+            'SAR - Saudi Riyal': 3.75,
+            'CNY - Chinese Yuan': 7.25,
+            'KRW - South Korean Won': 1360.00,
+            'BRL - Brazilian Real': 5.20,
+            'ZAR - South African Rand': 18.50,
+            'TRY - Turkish Lira': 32.00,
+            'SEK - Swedish Krona': 10.70,
+            'PLN - Polish Złoty': 4.00,
+        };
+        
+        function getExchangeRates() {
+            const customCurrencies = loadCustomItems(CUSTOM_CURRENCIES_KEY);
+            return {...baseExchangeRates, ...customCurrencies};
+        }
+        
+        function populateCurrencyDropdowns() {
+            const fromEl = document.getElementById('currency-from');
+            const toEl = document.getElementById('currency-to');
+            const exchangeRates = getExchangeRates(); 
+            const currencyList = Object.keys(exchangeRates).sort(); 
+
+            fromEl.innerHTML = '';
+            toEl.innerHTML = '';
+
+            currencyList.forEach(currency => {
+                const opt1 = document.createElement('option');
+                opt1.value = currency;
+                opt1.textContent = currency;
+                fromEl.appendChild(opt1);
+
+                const opt2 = document.createElement('option');
+                opt2.value = currency;
+                opt2.textContent = currency;
+                toEl.appendChild(opt2);
+            });
+            fromEl.value = exchangeRates['INR - Indian Rupee'] ? 'INR - Indian Rupee' : currencyList[0];
+            toEl.value = exchangeRates['USD - US Dollar'] ? 'USD - US Dollar' : currencyList[1];
+        }
+
+        function handleCurrencyConvert() {
+            const fromCurrency = document.getElementById('currency-from').value;
+            const toCurrency = document.getElementById('currency-to').value;
+            const value = parseFloat(document.getElementById('currency-input').value);
+            const resultDisplay = document.getElementById('currency-result');
+            
+            const exchangeRates = getExchangeRates();
+
+            if (isNaN(value) || !fromCurrency || !toCurrency) {
+                resultDisplay.textContent = 'Result: Invalid Input';
+                return;
+            }
+
+            if (fromCurrency === toCurrency) {
+                resultDisplay.textContent = `Result: ${value.toFixed(2)} ${toCurrency.split(' - ')[0]}`;
+                return;
+            }
+
+            const fromRate = exchangeRates[fromCurrency];
+            const toRate = exchangeRates[toCurrency];
+
+            if (!fromRate || !toRate) {
+                resultDisplay.textContent = 'Result: Conversion Rate Missing';
+                return;
+            }
+
+            const valueInUSD = value / fromRate;
+            const result = valueInUSD * toRate;
+            const targetCode = toCurrency.split(' - ')[0];
+
+            resultDisplay.textContent = `Result: ${result.toFixed(2)} ${targetCode}`;
+        }
+
+        function simulateAddCurrency() {
+            openAddItemModal('Currency');
+        }
+        
+        // --- EMI Calculator Logic (UNTOUCHED) ---
+        
+        function getPaymentFrequency() {
+            const freq = document.getElementById('emi-frequency').value;
+            let paymentsPerYear = 12;
+            switch (freq) {
+                case 'quarterly': paymentsPerYear = 4; break;
+                case 'half-yearly': paymentsPerYear = 2; break;
+                case 'yearly': paymentsPerYear = 1; break;
+                case 'monthly': 
+                default: paymentsPerYear = 12; break;
+            }
+            return paymentsPerYear;
+        }
+        
+        function getFrequencyLabel() {
+            const freq = document.getElementById('emi-frequency').value;
+            switch (freq) {
+                case 'quarterly': return 'Quarterly';
+                case 'half-yearly': return 'Half-Yearly';
+                case 'yearly': return 'Yearly';
+                case 'monthly': 
+                default: return 'Monthly';
+            }
+        }
+        
+        function handleEMIConvert() {
+            const principal = parseFloat(document.getElementById('emi-principal').value);
+            const rate = parseFloat(document.getElementById('emi-rate').value);
+            const years = parseFloat(document.getElementById('emi-years').value);
+            const extraPayment = parseFloat(document.getElementById('emi-extra-payment').value) || 0;
+            
+            const paymentsPerYear = getPaymentFrequency();
+            const freqLabel = getFrequencyLabel();
+
+            const emiResultEl = document.getElementById('emi-result');
+            const totalInterestEl = document.getElementById('emi-total-interest');
+            const totalPaymentEl = document.getElementById('emi-total-payment');
+            const amortizationTableBody = document.getElementById('amortization-table-body');
+            const prepaymentNoteEl = document.getElementById('emi-prepayment-note');
+            
+            if (isNaN(principal) || isNaN(rate) || isNaN(years) || principal <= 0 || rate < 0 || years <= 0 || extraPayment < 0) {
+                if (emiChart) emiChart.destroy();
+                return;
+            }
+
+            const periodicRate = rate / (paymentsPerYear * 100);
+            const maxPeriods = years * paymentsPerYear;
+
+            let periodicEMI;
+            
+            if (periodicRate === 0) {
+                periodicEMI = principal / maxPeriods;
+            } else {
+                const power = Math.pow(1 + periodicRate, maxPeriods);
+                periodicEMI = principal * periodicRate * power / (power - 1);
+            }
+            
+            let currentPrincipal = principal;
+            let totalInterestPaid = 0;
+            let period = 0;
+            let amortizationSchedule = [];
+            let loanEndDate = null;
+            let originalTotalInterest = 0;
+            
+            const effectivePayment = periodicEMI + extraPayment;
+
+            while (currentPrincipal > 0 && period < (maxPeriods * 5)) {
+                period++;
+                
+                let interestPayment = currentPrincipal * periodicRate;
+                originalTotalInterest += interestPayment;
+
+                let principalPayment = effectivePayment - interestPayment;
+                
+                if (currentPrincipal - principalPayment < 0) {
+                    principalPayment = currentPrincipal;
+                }
+                
+                if (period === maxPeriods * 5 && currentPrincipal > 0) {
+                     break;
+                }
+                
+                currentPrincipal -= principalPayment;
+                totalInterestPaid += interestPayment;
+                
+                const remainingBalance = currentPrincipal > 0 ? currentPrincipal : 0;
+                
+                if (loanEndDate === null) {
+                    if (remainingBalance <= 0) {
+                         const date = new Date();
+                         const monthsToAdd = Math.round(period * (12 / paymentsPerYear));
+                         date.setMonth(date.getMonth() + monthsToAdd);
+                         loanEndDate = date;
+                    }
+                }
+
+
+                amortizationSchedule.push({
+                    period: period,
+                    payment: periodicEMI,
+                    extra: extraPayment,
+                    interest: interestPayment,
+                    principal: principalPayment,
+                    balance: remainingBalance,
+                });
+                
+                if (remainingBalance <= 0.01) break;
+            }
+            
+            const finalTotalPayment = principal + totalInterestPaid;
+            
+            const formatNumber = (num) => num.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+            const formatCurrency = (num) => `₹ ${formatNumber(num)}`;
+
+
+            emiResultEl.textContent = `${freqLabel} EMI: ${formatCurrency(periodicEMI)}`;
+            totalInterestEl.textContent = `Total Interest: ${formatCurrency(totalInterestPaid)}`;
+            totalPaymentEl.textContent = `Total Payment: ${formatCurrency(finalTotalPayment)}`;
+            
+            
+            if (extraPayment > 0 && loanEndDate) {
+                const monthsInSchedule = Math.round(amortizationSchedule.length * (12 / paymentsPerYear));
+                const originalYears = years;
+                
+                prepaymentNoteEl.innerHTML = `
+                    <div class="mt-4 p-3 rounded-lg bg-success-color text-white">
+                        <p class="font-bold">✅ Loan Paid Off Early!</p>
+                        <p>With an extra ${formatCurrency(extraPayment)} payment, your loan tenure reduces from ${years} years to approximately **${(monthsInSchedule / 12).toFixed(1)} years**.</p>
+                        <p>You save about **${formatCurrency(originalTotalInterest - totalInterestPaid)}** in interest and the loan ends on: **${loanEndDate.toLocaleDateString()}**.</p>
+                    </div>
+                `;
+            } else if (extraPayment > 0 && !loanEndDate) {
+                 prepaymentNoteEl.innerHTML = `
+                    <div class="mt-4 p-3 rounded-lg bg-error-color text-white">
+                        <p class="font-bold">⚠️ Warning</p>
+                        <p>The calculation may be too long, or the extra payment is too low to significantly impact the original tenure.</p>
+                    </div>
+                `;
+            } else {
+                 prepaymentNoteEl.innerHTML = '';
+            }
+            
+            renderEMIPieChart(principal, totalInterestPaid);
+            renderAmortizationTable(amortizationSchedule, amortizationTableBody);
+        }
+
+        function renderEMIPieChart(principal, totalInterest) {
+            const ctx = document.getElementById('emi-pie-chart');
+            const primaryColor = AppState.settings.customColors['--primary-color'] || defaultCustomColors['--primary-color'];
+            const successColor = AppState.settings.customColors['--success-color'] || defaultCustomColors['--success-color'];
+            
+            if (emiChart) {
+                emiChart.destroy();
+            }
+
+            emiChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: ['Principal Amount', 'Total Interest Paid'],
+                    datasets: [{
+                        data: [principal, totalInterest],
+                        backgroundColor: [
+                            primaryColor,
+                            successColor
+                        ],
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: 'var(--text-color)'
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Principal vs Interest Breakdown',
+                            color: 'var(--text-color)'
+                        }
+                    }
+                }
+            });
+        }
+        
+        function renderAmortizationTable(schedule, tableBody) {
+            tableBody.innerHTML = '';
+            
+            const formatNumber = (num) => num.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+            
+            schedule.forEach(item => {
+                const row = tableBody.insertRow();
+                
+                let cell = row.insertCell();
+                cell.textContent = item.period;
+                cell.classList.add('text-center');
+
+                cell = row.insertCell();
+                cell.textContent = formatNumber(item.payment + item.extra);
+                
+                cell = row.insertCell();
+                cell.textContent = formatNumber(item.principal);
+                
+                cell = row.insertCell();
+                cell.textContent = formatNumber(item.interest);
+                
+                cell = row.insertCell();
+                cell.textContent = formatNumber(item.balance);
+            });
+        }
+        
+        // --- NEW: SIP Calculator Logic (UNTOUCHED) ---
+        
+        function handleSIPCalculate() {
+            const monthlyInvestment = parseFloat(document.getElementById('sip-monthly-investment').value);
+            const rateOfReturn = parseFloat(document.getElementById('sip-rate').value);
+            const years = parseFloat(document.getElementById('sip-years').value);
+            const stepUpRate = parseFloat(document.getElementById('sip-step-up').value) || 0;
+            
+            const sipResultEl = document.getElementById('sip-result');
+            const investedAmountEl = document.getElementById('sip-invested-amount');
+            const totalWealthEl = document.getElementById('sip-total-wealth');
+            const returnsEl = document.getElementById('sip-returns');
+            
+            if (isNaN(monthlyInvestment) || isNaN(rateOfReturn) || isNaN(years) || monthlyInvestment <= 0 || rateOfReturn < 0 || years <= 0 || stepUpRate < 0) {
+                if (sipChart) sipChart.destroy();
+                return;
+            }
+
+            const monthlyRate = (rateOfReturn / 100) / 12; 
+            const totalMonths = years * 12; 
+            const stepUpFactor = stepUpRate / 100; 
+            
+            let totalInvested = 0;
+            let currentInvestment = monthlyInvestment;
+            let futureValue = 0;
+            
+            const formatNumber = (num) => num.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+            const formatCurrency = (num) => `₹ ${formatNumber(num)}`;
+
+            if (stepUpRate === 0) {
+                const factor = (Math.pow(1 + monthlyRate, totalMonths) - 1) / monthlyRate;
+                futureValue = monthlyInvestment * factor * (1 + monthlyRate);
+                totalInvested = monthlyInvestment * totalMonths;
+                
+            } else {
+                for (let year = 1; year <= years; year++) {
+                    
+                    futureValue = futureValue * Math.pow(1 + monthlyRate, 12);
+                    
+                    for (let month = 1; month <= 12; month++) {
+                        const remainingMonths = totalMonths - (year - 1) * 12 - month;
+                        futureValue += currentInvestment * Math.pow(1 + monthlyRate, remainingMonths + 1); 
+                        totalInvested += currentInvestment;
+                    }
+                    
+                    if (year < years) {
+                         currentInvestment = currentInvestment * (1 + stepUpFactor);
+                    }
+                }
+            }
+            
+            const totalReturns = futureValue - totalInvested;
+
+            sipResultEl.textContent = `Estimated Wealth: ${formatCurrency(futureValue)}`;
+            investedAmountEl.textContent = `Total Invested: ${formatCurrency(totalInvested)}`;
+            totalWealthEl.textContent = `Total Wealth: ${formatCurrency(futureValue)}`;
+            returnsEl.textContent = `Total Returns: ${formatCurrency(totalReturns)}`;
+            
+            renderSIPPieChart(totalInvested, totalReturns);
+        }
+        
+        function renderSIPPieChart(totalInvested, totalReturns) {
+            const ctx = document.getElementById('sip-pie-chart');
+            const primaryColor = AppState.settings.customColors['--primary-color'] || defaultCustomColors['--primary-color'];
+            const successColor = AppState.settings.customColors['--success-color'] || defaultCustomColors['--success-color'];
+            
+            if (sipChart) {
+                sipChart.destroy();
+            }
+
+            sipChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: ['Total Invested Amount', 'Estimated Returns'],
+                    datasets: [{
+                        data: [totalInvested, totalReturns],
+                        backgroundColor: [
+                            primaryColor,
+                            successColor
+                        ],
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: 'var(--text-color)'
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Investment vs Returns Breakdown',
+                            color: 'var(--text-color)'
+                        }
+                    }
+                }
+            });
+        }
+
+
+        // --- Custom Alert/Modal (UNTOUCHED) ---
+        function alertMessage(title, message, color) {
+            const modalEl = document.getElementById('custom-alert-modal');
+            document.getElementById('alert-title').textContent = title;
+            document.getElementById('alert-message').textContent = message;
+            
+            let styleColor = '';
+            if (color === 'green-500') {
+                 styleColor = AppState.settings.customColors['--success-color'] || '#10b981';
+            } else if (color === 'red-500') {
+                 styleColor = AppState.settings.customColors['--error-color'] || '#ef4444';
+            } else {
+                styleColor = '#f3f4f6'; 
+            }
+            
+            document.getElementById('alert-title').style.color = styleColor;
+            
+            modalEl.classList.remove('hidden');
+
+            setTimeout(() => {
+                modalEl.classList.add('hidden');
+            }, 3000);
+        }
+
+        // --- ADD ITEM MODAL LOGIC (UNTOUCHED) ---
+
+        function openAddItemModal(type) {
+            playClickSound();
+            AppState.isAddingUnitOrCurrency = type;
+            const modal = document.getElementById('add-item-modal');
+            const titleEl = document.getElementById('add-item-title');
+            const unitCategoryDiv = document.getElementById('unit-category-div');
+            const factorLabelEl = document.getElementById('item-factor-label');
+            const factorHelpEl = document.getElementById('item-factor-help');
+
+            document.getElementById('item-name-input').value = '';
+            document.getElementById('item-factor-input').value = '';
+            
+            const unitCategories = Object.keys(baseUnitConversions).filter(cat => cat !== 'Temperature' && cat !== 'FuelConsumption'); 
+            const categorySelect = document.getElementById('unit-category-select');
+            categorySelect.innerHTML = unitCategories.map(cat => `<option value="${cat}">${cat}</option>`).join('');
+
+
+            if (type === 'Unit') {
+                titleEl.textContent = 'Add New Unit';
+                document.getElementById('item-name-input').placeholder = 'e.g., Bigha (UP)';
+                unitCategoryDiv.classList.remove('hidden'); 
+                
+                const updateFactorLabel = () => {
+                     const selectedCat = categorySelect.value;
+                     const baseUnit = baseUnitConversions[selectedCat]?.base || 'Base Unit';
+                     factorLabelEl.textContent = `Conversion Factor in Base Unit (${baseUnit})`;
+                     factorHelpEl.textContent = `Value that converts 1 unit into the Base Unit (${baseUnit}).`;
+                };
+
+                categorySelect.onchange = updateFactorLabel; 
+                updateFactorLabel(); 
+
+                document.getElementById('item-factor-input').placeholder = 'e.g., 2529.28';
+            } else if (type === 'Currency') {
+                titleEl.textContent = 'Add New Currency';
+                document.getElementById('item-name-input').placeholder = 'e.g., ZWL - Zimbabwe Dollar';
+                unitCategoryDiv.classList.add('hidden'); 
+                
+                factorLabelEl.textContent = 'Exchange Rate to USD';
+                document.getElementById('item-factor-input').placeholder = 'e.g., 361.90';
+                factorHelpEl.textContent = 'How many units equal 1 US Dollar (USD).';
+            }
+            
+            modal.classList.remove('hidden');
+        }
+
+        function closeAddItemModal() {
+            AppState.isAddingUnitOrCurrency = null;
+            document.getElementById('add-item-modal').classList.add('hidden');
+        }
+        
+        function loadCustomItems(key) {
+            try {
+                const stored = JSON.parse(localStorage.getItem(key)) || {};
+                return stored; 
+            } catch (e) {
+                console.error("Error loading custom items:", e);
+                return {};
+            }
+        }
+        
+        async function saveCustomItemToLocal(type, name, factor, category = null) {
+            const key = type === 'Unit' ? CUSTOM_UNITS_KEY : CUSTOM_CURRENCIES_KEY;
+            
+            try {
+                let customItems = JSON.parse(localStorage.getItem(key)) || {};
+                
+                if (type === 'Unit') {
+                    customItems[name] = { factor: factor, category: category };
+                } else {
+                    customItems[name] = factor;
+                }
+                
+                localStorage.setItem(key, JSON.stringify(customItems));
+                return true;
+            } catch (e) {
+                console.error("Error saving custom item to Local Storage:", e);
+                return false;
+            }
+        }
+
+        async function handleAddItemSubmit() {
+            playClickSound();
+            const type = AppState.isAddingUnitOrCurrency;
+            const name = document.getElementById('item-name-input').value.trim();
+            const factor = parseFloat(document.getElementById('item-factor-input').value);
+
+            let category = null;
+            if (type === 'Unit') {
+                category = document.getElementById('unit-category-select').value;
+                if (category === 'Temperature' || category === 'FuelConsumption') { 
+                    alertMessage('Error', 'Custom units cannot be added to the Temperature or Fuel Consumption category.', 'red-500');
+                    return;
+                }
+            }
+
+            if (!name || isNaN(factor) || (type === 'Unit' && !category)) {
+                alertMessage('Error', 'Please enter a valid name, numeric factor/rate, and a category.', 'red-500');
+                return;
+            }
+            
+            const success = await saveCustomItemToLocal(type, name, factor, category);
+
+            if (success) {
+                alertMessage('Success!', `${type} "${name}" added to your custom list.`, 'green-500');
+                closeAddItemModal();
+                
+                if (type === 'Unit') {
+                    populateUnitDropdowns(); 
+                } else if (type === 'Currency') {
+                    populateCurrencyDropdowns();
+                }
+            } else {
+                alertMessage('Error', `Could not save custom ${type}.`, 'red-500');
+            }
+        }
+        
+        // --- NEW/MODIFIED: NOTEPAD LOGIC (UNTOUCHED) ---
+        
+        function openAddEditNoteModal(noteId = null) {
+            playClickSound();
+            AppState.currentEditingNoteId = noteId;
+            const modal = document.getElementById('add-edit-note-modal');
+            const deleteBtn = document.getElementById('note-delete-btn');
+            
+            // Clear or set defaults for NEW fields
+            document.getElementById('note-title-input-modal').value = '';
+            document.getElementById('note-content-input-modal').value = '';
+            document.getElementById('note-type-select').value = 'Note';
+            document.getElementById('note-priority-select').value = 'Medium';
+            document.getElementById('note-due-date-input').value = '';
+            
+            // Toggle visibility of Task-specific fields
+            document.getElementById('task-fields-container').classList.add('hidden');
+            
+            // Listener to show/hide task fields
+            document.getElementById('note-type-select').onchange = (e) => {
+                 document.getElementById('task-fields-container').classList.toggle('hidden', e.target.value !== 'Task');
+            };
+
+            if (noteId !== null) {
+                const note = AppState.notes.find(n => n.id === noteId);
+                if (note) {
+                    document.getElementById('note-title-input-modal').value = note.title;
+                    document.getElementById('note-content-input-modal').value = note.content;
+                    
+                    // Set NEW fields for editing
+                    document.getElementById('note-type-select').value = note.isTask ? 'Task' : 'Note';
+                    document.getElementById('task-fields-container').classList.toggle('hidden', !note.isTask);
+                    document.getElementById('note-priority-select').value = note.priority || 'Medium';
+                    document.getElementById('note-due-date-input').value = note.dueDate || '';
+
+                    deleteBtn.classList.remove('hidden');
+                }
+            } else {
+                deleteBtn.classList.add('hidden');
+            }
+            
+            modal.classList.add('open');
+            setTimeout(() => document.getElementById('note-title-input-modal').focus(), 250); 
+        }
+
+        function closeAddEditNoteModal() {
+            playClickSound();
+            AppState.currentEditingNoteId = null;
+            document.getElementById('add-edit-note-modal').classList.remove('open');
+        }
+
+
+        function saveNote() {
+            playClickSound();
+            const title = document.getElementById('note-title-input-modal').value.trim();
+            const content = document.getElementById('note-content-input-modal').value.trim();
+            const noteType = document.getElementById('note-type-select').value; // 'Note' or 'Task'
+            const isTask = noteType === 'Task';
+            
+            // Capture NEW Task fields
+            const priority = isTask ? document.getElementById('note-priority-select').value : null;
+            const dueDate = isTask ? document.getElementById('note-due-date-input').value : null;
+            const now = Date.now();
+
+            if (!title || !content) {
+                alertMessage('Error', 'Title and content cannot be empty.', 'red-500');
+                return;
+            }
+            
+            let newOrUpdatedNote = { 
+                id: AppState.currentEditingNoteId !== null ? AppState.currentEditingNoteId : nextNoteId, 
+                title, 
+                content, 
+                isTask, 
+                priority, 
+                dueDate, 
+                updated: now 
+            };
+            
+            if (AppState.currentEditingNoteId !== null) {
+                // Update existing note
+                const index = AppState.notes.findIndex(n => n.id === AppState.currentEditingNoteId);
+                if (index !== -1) {
+                    // Preserve completion status if it's an existing task
+                    newOrUpdatedNote.isCompleted = AppState.notes[index].isCompleted || false; 
+                    newOrUpdatedNote.created = AppState.notes[index].created;
+                    AppState.notes[index] = newOrUpdatedNote;
+                    alertMessage('Success', 'Note/Task updated successfully.', 'green-500');
+                }
+            } else {
+                // Add new note
+                newOrUpdatedNote.created = now;
+                newOrUpdatedNote.isCompleted = false; // New tasks are always incomplete
+                AppState.notes.unshift(newOrUpdatedNote); 
+                nextNoteId++;
+                alertMessage('Success', 'New note/task saved successfully.', 'green-500');
+            }
+            
+            saveAppDataToLocal();
+            renderNotes();
+            closeAddEditNoteModal();
+        }
+
+        function deleteNote(id = null) {
+            playClickSound();
+            const targetId = id === null ? AppState.currentEditingNoteId : id;
+            
+            if (targetId !== null && confirm('Are you sure you want to delete this note/task?')) {
+                 AppState.notes = AppState.notes.filter(n => n.id !== targetId);
+                 saveAppDataToLocal();
+                 renderNotes();
+                 closeAddEditNoteModal(); 
+                 alertMessage('Deleted', 'Note/Task successfully deleted.', 'green-500');
+            }
+        }
+        
+        // NEW FUNCTION: Toggle task completion status
+        function toggleTaskCompletion(id, event) {
+             playClickSound();
+             // Prevent event from bubbling up and opening the edit modal
+             event.stopPropagation(); 
+             
+             const noteIndex = AppState.notes.findIndex(n => n.id === id);
+             if (noteIndex !== -1) {
+                 AppState.notes[noteIndex].isCompleted = !AppState.notes[noteIndex].isCompleted;
+                 AppState.notes[noteIndex].updated = Date.now(); // Update timestamp for sorting
+                 saveAppDataToLocal();
+                 renderNotes();
+                 alertMessage('Status Updated', AppState.notes[noteIndex].isCompleted ? 'Task marked complete.' : 'Task marked pending.', 'green-500');
+             }
+        }
+        
+        // NEW FUNCTION: Set filtering state and re-render
+        function applyNoteFilter(filter) {
+            playClickSound();
+            AppState.currentNoteFilter = filter;
+            
+            // Update filter button appearance
+            document.querySelectorAll('.note-filter-btn').forEach(btn => {
+                btn.classList.remove('filter-active');
+            });
+            document.getElementById(`filter-btn-${filter}`).classList.add('filter-active');
+
+            renderNotes();
+        }
+
+        
+        function renderNotes() {
+            const notesListEl = document.getElementById('notes-list');
+            notesListEl.innerHTML = '';
+            
+            let filteredNotes = AppState.notes.slice(); // Shallow copy
+
+            // 1. Apply Filtering
+            switch (AppState.currentNoteFilter) {
+                case 'Task':
+                    filteredNotes = filteredNotes.filter(n => n.isTask);
+                    break;
+                case 'Note':
+                    filteredNotes = filteredNotes.filter(n => !n.isTask);
+                    break;
+                case 'Completed':
+                    filteredNotes = filteredNotes.filter(n => n.isTask && n.isCompleted);
+                    break;
+                case 'Pending':
+                    filteredNotes = filteredNotes.filter(n => n.isTask && !n.isCompleted);
+                    break;
+                case 'All':
+                default:
+                    // Show all
+                    break;
+            }
+
+            // 2. Apply Sorting (Completed tasks to the bottom, then by Priority (High->Low), then by Date)
+            filteredNotes.sort((a, b) => {
+                // Primary Sort: Completed vs Pending
+                if (a.isTask && a.isCompleted !== b.isCompleted) {
+                    return a.isCompleted ? 1 : -1; // Completed go to the bottom
+                }
+                
+                // Secondary Sort: Priority (Only for Tasks, High > Medium > Low)
+                const priorityOrder = { 'High': 3, 'Medium': 2, 'Low': 1 };
+                if (a.isTask && b.isTask && priorityOrder[b.priority] !== priorityOrder[a.priority]) {
+                    return priorityOrder[b.priority] - priorityOrder[a.priority];
+                }
+                
+                // Tertiary Sort: By Due Date (Oldest Due Date first)
+                if (a.dueDate && b.dueDate) {
+                     return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+                } else if (a.dueDate) {
+                     return -1; // Task with due date first
+                } else if (b.dueDate) {
+                     return 1;
+                }
+
+                // Final Sort: Last Updated (Newest first)
+                return (b.updated || b.created) - (a.updated || a.created);
+            });
+
+
+            if (filteredNotes.length === 0) {
+                notesListEl.innerHTML = '<p class="text-center text-gray-400 mt-8">No matching notes or tasks found.</p>';
+                return;
+            }
+
+            filteredNotes.forEach(note => {
+                const createdDate = new Date(note.created).toLocaleDateString();
+                const previewContent = note.content.split('\n')[0] || note.content;
+                
+                const isTask = note.isTask;
+                const isCompleted = note.isCompleted || false;
+                const priority = note.priority?.toLowerCase() || 'note';
+
+                const noteCard = document.createElement('div');
+                noteCard.className = `note-card p-4 rounded-xl shadow-md bg-[var(--input-bg)] transition hover:shadow-lg cursor-pointer space-y-2 ${priority} ${isCompleted ? 'note-card-task-completed' : ''}`;
+                noteCard.setAttribute('onclick', `openAddEditNoteModal(${note.id})`); 
+                
+                let metadata = '';
+                if (isTask) {
+                    const dueDisplay = note.dueDate ? new Date(note.dueDate).toLocaleDateString() : 'No Due Date';
+                    const priorityClass = `priority-${priority}`;
+                    metadata = `
+                        <div class="flex justify-between text-xs text-gray-400">
+                            <span class="${priorityClass} font-semibold">${note.priority} Priority</span>
+                            <span>Due: ${dueDisplay}</span>
+                        </div>
+                    `;
+                }
+
+                noteCard.innerHTML = `
+                    <div class="flex items-start space-x-3">
+                        ${isTask ? `
+                            <button class="w-6 h-6 p-0 flex-shrink-0" onclick="toggleTaskCompletion(${note.id}, event)">
+                                <i data-lucide="${isCompleted ? 'check-circle' : 'circle'}" class="w-6 h-6 text-primary hover:opacity-80 transition" style="color: ${isCompleted ? 'var(--success-color)' : 'var(--primary-color)'}"></i>
+                            </button>
+                        ` : ''}
+                        <div class="flex-grow min-w-0">
+                            <h4 class="text-lg font-semibold truncate">${note.title} (${isTask ? 'Task' : 'Note'})</h4>
+                            <p class="text-sm text-gray-300 mt-1 truncate">${previewContent.substring(0, 100)}</p>
+                        </div>
+                    </div>
+                    ${metadata}
+                    <p class="text-xs text-gray-500 mt-2">Created: ${createdDate}</p>
+                `;
+                notesListEl.appendChild(noteCard);
+            });
+            lucide.createIcons();
+        }
+
+        // --- CALENDAR LOGIC (UNTOUCHED) ---
+        
+        function renderCalendar() {
+             const currentDate = AppState.currentCalendarDate;
+             const year = currentDate.getFullYear();
+             const month = currentDate.getMonth();
+             const today = new Date();
+             const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
+
+             document.getElementById('calendar-month-year').textContent = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+             
+             const calendarGrid = document.getElementById('calendar-grid');
+             calendarGrid.innerHTML = '';
+
+             const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+             dayNames.forEach(day => {
+                 const dayNameCell = document.createElement('div');
+                 dayNameCell.className = 'day-cell day-name font-bold text-sm text-primary';
+                 dayNameCell.textContent = day;
+                 calendarGrid.appendChild(dayNameCell);
+             });
+             
+             const firstDayOfMonth = new Date(year, month, 1).getDay(); 
+             const daysInMonth = new Date(year, month + 1, 0).getDate(); 
+
+             for (let i = 0; i < firstDayOfMonth; i++) {
+                 calendarGrid.innerHTML += '<div class="day-cell"></div>';
+             }
+
+             for (let day = 1; day <= daysInMonth; day++) {
+                 const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                 
+                 const cell = document.createElement('div');
+                 cell.className = 'day-cell text-base relative';
+                 
+                 let classes = '';
+                 
+                 if (isCurrentMonth && day === today.getDate()) {
+                     classes += ' today';
+                 }
+                 
+                 const eventsForDay = AppState.events[dateString] || [];
+                 if (eventsForDay.length > 0) {
+                     classes += ' has-event';
+                 }
+                 
+                 cell.className += classes;
+                 cell.textContent = day;
+                 cell.dataset.date = dateString;
+                 cell.addEventListener('click', () => openEventDetailsModal(dateString)); 
+                 
+                 calendarGrid.appendChild(cell);
+             }
+             
+             const selectedDate = document.querySelector(`.day-cell[data-date="${AppState.currentSelectedCalendarDate}"]`);
+             if (selectedDate) {
+                 selectedDate.classList.add('selected');
+             }
+             
+             document.getElementById('events-list').innerHTML = '';
+             document.getElementById('selected-day-display').textContent = '';
+        }
+        
+        function changeMonth(delta) {
+            playClickSound();
+            const date = AppState.currentCalendarDate;
+            date.setMonth(date.getMonth() + delta);
+            AppState.currentCalendarDate = date;
+            renderCalendar();
+        }
+        
+        function openEventDetailsModal(dateString) {
+             playClickSound();
+             AppState.currentSelectedCalendarDate = dateString;
+             
+             document.querySelectorAll('.day-cell.selected').forEach(el => el.classList.remove('selected'));
+             const selectedCell = document.querySelector(`.day-cell[data-date="${dateString}"]`);
+             if (selectedCell) {
+                 selectedCell.classList.add('selected');
+             }
+             
+             const date = new Date(dateString);
+             document.getElementById('event-modal-date-display').textContent = date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+             document.getElementById('event-modal-hidden-date').value = dateString;
+             
+             renderEventsListInModal(dateString);
+             
+             document.getElementById('event-details-modal').classList.remove('hidden');
+        }
+        
+        function closeEventDetailsModal() {
+             document.getElementById('event-details-modal').classList.add('hidden');
+        }
+
+        function renderEventsListInModal(dateString) {
+             const eventsForDay = AppState.events[dateString] || [];
+             const eventsListEl = document.getElementById('event-modal-list');
+             
+             eventsListEl.innerHTML = '';
+             
+             if (eventsForDay.length === 0) {
+                 eventsListEl.innerHTML = '<p class="text-center text-gray-400 mt-4">No events scheduled for this day.</p>';
+                 return;
+             }
+             
+             eventsForDay.sort((a, b) => a.time.localeCompare(b.time)).forEach(event => {
+                 const eventCard = document.createElement('div');
+                 eventCard.className = 'p-3 rounded-lg bg-[var(--primary-bg)] shadow-md flex justify-between items-center hover:bg-opacity-90 transition';
+                 eventCard.innerHTML = `
+                     <div>
+                         <p class="font-bold text-primary">${event.time}</p>
+                         <h4 class="text-base">${event.title}</h4>
+                     </div>
+                     <button onclick="deleteEvent('${dateString}', ${event.id})" class="text-error-color hover:text-opacity-80 p-1">
+                         <i data-lucide="trash-2" class="w-4 h-4"></i>
+                     </button>
+                 `;
+                 eventsListEl.appendChild(eventCard);
+             });
+             lucide.createIcons();
+        }
+        
+        function toggleAddEventForm(open) {
+            const form = document.getElementById('add-event-form-container');
+            const toggleBtn = document.getElementById('add-event-toggle-btn');
+            
+            if (open) {
+                 form.classList.remove('hidden');
+                 toggleBtn.textContent = 'Hide Form';
+            } else {
+                 form.classList.add('hidden');
+                 toggleBtn.textContent = 'Add New Event';
+            }
+            document.getElementById('new-event-title-input').value = '';
+            document.getElementById('new-event-time-input').value = '10:00';
+        }
+        
+        function saveEvent() {
+            playClickSound();
+            const dateString = document.getElementById('event-modal-hidden-date').value;
+            const time = document.getElementById('new-event-time-input').value;
+            const title = document.getElementById('new-event-title-input').value.trim();
+            
+            if (!dateString || !time || !title) {
+                 alertMessage('Error', 'Please fill in all event details.', 'red-500');
+                 return;
+            }
+            
+            const newEvent = { id: nextEventId++, time, title };
+            
+            if (!AppState.events[dateString]) {
+                AppState.events[dateString] = [];
+            }
+            
+            AppState.events[dateString].push(newEvent);
+            
+            saveAppDataToLocal();
+            renderCalendar(); 
+            renderEventsListInModal(dateString); 
+            toggleAddEventForm(false); 
+            alertMessage('Success', `Event "${title}" saved for ${dateString}.`, 'green-500');
+        }
+
+        function deleteEvent(dateString, id) {
+            playClickSound();
+            if (confirm('Are you sure you want to delete this event?')) {
+                 if (AppState.events[dateString]) {
+                     AppState.events[dateString] = AppState.events[dateString].filter(e => e.id !== id);
+                     if (AppState.events[dateString].length === 0) {
+                         delete AppState.events[dateString];
+                     }
+                     saveAppDataToLocal();
+                     renderCalendar(); 
+                     renderEventsListInModal(dateString); 
+                     alertMessage('Deleted', 'Event successfully deleted.', 'green-500');
+                 }
+            }
+        }
+
+        // --- Event Listeners and Initialization ---
+        window.onload = () => {
+            initApp(); 
+            renderView();
+            updateDisplay();
+            
+            populateUnitDropdowns();
+            populateCurrencyDropdowns(); 
+
+            document.getElementById('menu-button').addEventListener('click', toggleMenu);
+            document.getElementById('menu-backdrop').addEventListener('click', toggleMenu);
+
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    AppState.currentView = e.currentTarget.dataset.view;
+                    toggleMenu();
+                    renderView();
+                });
+            });
+
+            document.getElementById('settings-button').addEventListener('click', () => toggleSettingsModal(true));
+            document.getElementById('close-settings-modal').addEventListener('click', () => toggleSettingsModal(false));
+            
+            document.getElementById('customize-theme-btn').addEventListener('click', () => toggleCustomThemeModal(true));
+            document.getElementById('custom-theme-cancel-btn').addEventListener('click', () => toggleCustomThemeModal(false));
+            document.getElementById('custom-theme-save-btn').addEventListener('click', handleCustomThemeSave);
+
+
+            document.querySelectorAll('.setting-input').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const key = e.target.id.replace('setting-', '');
+                    let value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+                    
+                    saveSetting(key, value);
+                    
+                    if (key === 'theme') {
+                        updateCustomThemeButtonState();
+                    }
+                });
+            });
+
+             // Calculator event listener
+            document.getElementById('calculator-keys').addEventListener('click', (event) => {
+                const { target } = event;
+                if (!target.matches('button')) { return; }
+
+                if (target.classList.contains('number-btn')) {
+                    inputDigit(target.textContent);
+                    return;
+                }
+                if (target.classList.contains('operator-btn')) {
+                    handleOperator(target.textContent);
+                    return;
+                }
+                if (target.classList.contains('decimal-btn')) {
+                    inputDigit('.');
+                    return;
+                }
+                if (target.classList.contains('equal-btn')) {
+                    handleOperator('=');
+                    return;
+                }
+                if (target.classList.contains('clear-btn')) {
+                    resetCalculator();
+                    return;
+                }
+                if (target.classList.contains('sci-func-btn')) {
+                    calculateScientific(target.dataset.func);
+                    return;
+                }
+            });
+            
+            document.getElementById('scientific-toggle').addEventListener('click', toggleScientific);
+            
+            // Health Calculator Listeners (Updated to use correct classes)
+            document.querySelectorAll('.bmi-input').forEach(input => input.addEventListener('input', calculateBMI));
+            document.getElementById('bmi-calculate-btn').addEventListener('click', calculateBMI);
+
+            document.querySelectorAll('.bmr-input').forEach(input => input.addEventListener('input', calculateBMR));
+            document.getElementById('bmr-calculate-btn').addEventListener('click', calculateBMR);
+            
+            document.getElementById('bmr-protein').addEventListener('input', updateCarbsPercentage);
+            document.getElementById('bmr-fat').addEventListener('input', updateCarbsPercentage);
+            
+            document.getElementById('tab-bmi').addEventListener('click', () => showHealthView('BMI'));
+            document.getElementById('tab-bmr').addEventListener('click', () => showHealthView('BMR'));
+
+
+            document.getElementById('add-unit-btn').addEventListener('click', simulateAddUnit);
+
+            document.getElementById('add-currency-btn').addEventListener('click', simulateAddCurrency);
+            document.getElementById('currency-input').addEventListener('input', handleCurrencyConvert);
+            document.getElementById('currency-from').addEventListener('change', handleCurrencyConvert);
+            document.getElementById('currency-to').addEventListener('change', handleCurrencyConvert);
+            
+            document.getElementById('emi-principal').addEventListener('input', handleEMIConvert);
+            document.getElementById('emi-rate').addEventListener('input', handleEMIConvert);
+            document.getElementById('emi-years').addEventListener('input', handleEMIConvert);
+            document.getElementById('emi-frequency').addEventListener('change', handleEMIConvert); 
+            document.getElementById('emi-extra-payment').addEventListener('input', handleEMIConvert); 
+            document.getElementById('emi-calculate-btn').addEventListener('click', handleEMIConvert);
+
+            document.getElementById('sip-monthly-investment').addEventListener('input', handleSIPCalculate);
+            document.getElementById('sip-rate').addEventListener('input', handleSIPCalculate);
+            document.getElementById('sip-years').addEventListener('input', handleSIPCalculate);
+            document.getElementById('sip-step-up').addEventListener('input', handleSIPCalculate);
+            document.getElementById('sip-calculate-btn').addEventListener('click', handleSIPCalculate);
+
+
+            document.getElementById('close-add-item-modal').addEventListener('click', closeAddItemModal);
+            document.getElementById('add-item-submit-btn').addEventListener('click', handleAddItemSubmit);
+            
+            // --- NEW: NOTEPAD LISTENERS ---
+            document.getElementById('open-add-note-modal-btn').addEventListener('click', () => openAddEditNoteModal(null));
+            document.getElementById('note-save-btn').addEventListener('click', saveNote);
+            document.getElementById('note-cancel-btn').addEventListener('click', closeAddEditNoteModal);
+            document.getElementById('note-delete-btn').addEventListener('click', () => deleteNote()); 
+            
+            // NEW: Filter Button Listeners
+            document.querySelectorAll('.note-filter-btn').forEach(btn => {
+                btn.addEventListener('click', () => applyNoteFilter(btn.dataset.filter));
+            });
+            
+            // --- NEW: CALENDAR LISTENERS ---
+            document.getElementById('prev-month-btn').addEventListener('click', () => changeMonth(-1));
+            document.getElementById('next-month-btn').addEventListener('click', () => changeMonth(1));
+            document.getElementById('close-event-details-modal').addEventListener('click', closeEventDetailsModal);
+            document.getElementById('add-event-toggle-btn').addEventListener('click', () => toggleAddEventForm(document.getElementById('add-event-form-container').classList.contains('hidden')));
+            document.getElementById('save-new-event-btn').addEventListener('click', saveEvent);
+
+
+            lucide.createIcons();
+            handleCurrencyConvert(); 
+            calculateBMI(); 
+            calculateBMR(); // Initialize BMR
+            handleEMIConvert(); 
+            handleSIPCalculate(); 
+            
+            window.openAddEditNoteModal = openAddEditNoteModal; 
+            window.deleteEvent = deleteEvent; 
+            window.openEventDetailsModal = openEventDetailsModal; 
+            window.toggleTaskCompletion = toggleTaskCompletion; 
+            window.applyNoteFilter = applyNoteFilter; 
+            window.calculateBMI = calculateBMI; // Expose global function
+            window.calculateBMR = calculateBMR; // Expose global function
+            window.updateCarbsPercentage = updateCarbsPercentage; // Expose global function
+
+            
+            // Service Worker Registration
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('/service-worker.js').then(registration => {
+                        console.log('SW registered: ', registration);
+                    }).catch(registrationError => {
+                        console.log('SW registration failed: ', registrationError);
+                    });
+                });
+            }
+        };
+
+        window.toggleMenu = toggleMenu;
+        window.toggleSettingsModal = toggleSettingsModal;
+        window.toggleScientific = toggleScientific;
+        window.handleUnitConvert = handleUnitConvert;
+        window.handleCurrencyConvert = handleCurrencyConvert;
+        window.toggleCustomThemeModal = toggleCustomThemeModal; 
+        window.handleEMIConvert = handleEMIConvert; 
+        window.handleSIPCalculate = handleSIPCalculate; 
+        
+    </script>
+    
+    <div id="app" class="relative max-w-lg mx-auto p-4 flex flex-col min-h-screen">
+        
+        <header class="flex justify-between items-center py-4 z-40 sticky top-0 bg-[var(--primary-bg)] shadow-md">
+            <button id="menu-button" class="w-12 h-12 rounded-full bg-primary hover:bg-opacity-80 transition flex items-center justify-center p-2 text-white shadow-lg">
+                <i data-lucide="menu" class="w-6 h-6"></i>
+            </button>
+            
+            <h1 id="current-view-title" class="text-xl font-bold">Calculator</h1> 
+            
+            <button id="settings-button" class="w-12 h-12 rounded-full bg-primary hover:bg-opacity-80 transition flex items-center justify-center p-2 text-white shadow-lg">
+                <i data-lucide="settings" class="w-6 h-6"></i>
+            </button>
+        </header>
+
+        <div class="text-xs text-gray-500 mb-4 text-center overflow-hidden whitespace-nowrap overflow-ellipsis" id="user-id-display">
+            User ID: Local Mode
+        </div>
+
+        <main class="flex-grow pb-8">
+            
+            <div id="view-Calculator" class="h-full flex flex-col justify-end transition duration-300 design-Classic">
+                <div id="calc-display" class="text-5xl font-light text-right mb-4 p-4 rounded-xl bg-[var(--input-bg)] break-words overflow-hidden" style="min-height: 100px;">0</div>
+
+                <div id="scientific-keys" class="grid grid-cols-5 gap-3 mb-3 hidden">
+                    <button data-func="sin" class="sci-func-btn calc-button bg-secondary-btn text-white text-lg">sin</button>
+                    <button data-func="cos" class="sci-func-btn calc-button bg-secondary-btn text-white text-lg">cos</button>
+                    <button data-func="tan" class="sci-func-btn calc-button bg-secondary-btn text-white text-lg">tan</button>
+                    <button data-func="log" class="sci-func-btn calc-button bg-secondary-btn text-white text-lg">log</button>
+                    <button data-func="sqrt" class="sci-func-btn calc-button bg-secondary-btn text-white text-lg">√</button>
+                    <button data-func="^2" class="sci-func-btn calc-button bg-secondary-btn text-white text-lg">x²</button>
+                    <button data-func="pi" class="sci-func-btn calc-button bg-secondary-btn text-white text-lg">π</button>
+                    <button data-func="e" class="sci-func-btn calc-button bg-secondary-btn text-white text-lg">e</button>
+                    <button data-func="abs" class="sci-func-btn calc-button bg-secondary-btn text-white text-lg">|x|</button>
+                    <button data-func="fac" class="sci-func-btn calc-button bg-secondary-btn text-white text-lg">x!</button>
+                </div>
+
+                <div id="calculator-keys" class="grid grid-cols-4 gap-3">
+                    
+                    <button id="scientific-toggle" class="calc-button bg-secondary-btn text-white text-lg col-span-1 flex items-center justify-center p-2 rounded-full w-full h-full aspect-square" style="min-height: 3.5rem;">
+                        <i id="scientific-toggle-icon" data-lucide="calculator" class="w-6 h-6"></i>
+                    </button>
+                    <button class="clear-btn calc-button text-white text-xl col-span-2" style="background-color: var(--error-color);">AC</button>
+                    <button class="operator-btn calc-button bg-primary app-button text-white text-xl">/</button>
+                    
+                    <button class="number-btn calc-button bg-secondary-btn text-white text-2xl">7</button>
+                    <button class="number-btn calc-button bg-secondary-btn text-white text-2xl">8</button>
+                    <button class="number-btn calc-button bg-secondary-btn text-white text-2xl">9</button>
+                    <button class="operator-btn calc-button bg-primary app-button text-white text-xl">*</button>
+
+                    <button class="number-btn calc-button bg-secondary-btn text-white text-2xl">4</button>
+                    <button class="number-btn calc-button bg-secondary-btn text-white text-2xl">5</button>
+                    <button class="number-btn calc-button bg-secondary-btn text-white text-2xl">6</button>
+                    <button class="operator-btn calc-button bg-primary app-button text-white text-xl">-</button>
+
+                    <button class="number-btn calc-button bg-secondary-btn text-white text-2xl">1</button>
+                    <button class="number-btn calc-button bg-secondary-btn text-white text-2xl">2</button>
+                    <button class="number-btn calc-button bg-secondary-btn text-white text-2xl">3</button>
+                    <button class="operator-btn calc-button bg-primary app-button text-white text-xl">+</button>
+
+                    <button class="number-btn calc-button bg-secondary-btn text-white text-2xl col-span-2">0</button>
+                    <button class="decimal-btn calc-button bg-secondary-btn text-white text-2xl">.</button>
+                    <button class="equal-btn calc-button bg-primary app-button text-white text-xl">=</button>
+                </div>
+            </div>
+            
+            <div id="view-Unit-Converter" class="hidden p-4 rounded-xl shadow-xl relative pt-12" style="background-color: var(--primary-bg);">
+                <h2 class="text-2xl font-semibold mb-4 text-center">Unit Converter</h2>
+                
+                <button id="add-unit-btn" class="w-10 h-10 rounded-full bg-primary app-button hover:bg-opacity-80 transition flex items-center justify-center p-2 text-white shadow-lg absolute right-4 top-4 z-10">
+                    <i data-lucide="plus" class="w-5 h-5"></i>
+                </button>
+
+                <div class="space-y-4">
+                    <label class="block">Category</label>
+                    <select id="unit-category" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary"></select>
+                    
+                    <label class="block">Value to Convert</label>
+                    <input type="number" id="unit-input" value="100" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary">
+                    
+                    <div class="flex space-x-2">
+                        <div class="flex-1">
+                            <label class="block">From Unit</label>
+                            <select id="unit-from" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary"></select>
+                        </div>
+                        <div class="flex-1">
+                            <label class="block">To Unit</label>
+                            <select id="unit-to" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary"></select>
+                        </div>
+                    </div>
+                    
+                    <div id="unit-result" class="text-xl font-bold pt-4 text-center text-primary">Result: 0.00</div>
+                </div>
+            </div>
+
+            <div id="view-Health-Calculator" class="hidden p-4 rounded-xl shadow-xl space-y-4" style="background-color: var(--primary-bg);">
+                <h2 class="text-2xl font-semibold mb-2 text-center">Health & Fitness Planner</h2>
+                
+                <div class="flex justify-around border-b border-[var(--input-bg)] mb-4">
+                    <button id="tab-bmi" class="health-tab p-3 w-1/2 text-center text-lg active" onclick="showHealthView('BMI')">BMI Calculator</button>
+                    <button id="tab-bmr" class="health-tab p-3 w-1/2 text-center text-lg" onclick="showHealthView('BMR')">BMR/TDEE Planner</button>
+                </div>
+                
+                <div id="health-bmi-content">
+                    <label class="block">Gender</label>
+                    <select id="bmi-gender" class="bmi-input w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary" onchange="calculateBMI()">
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                    </select>
+
+                    <label class="block mt-2">Weight (kg)</label>
+                    <input type="number" id="bmi-weight" placeholder="e.g., 70" value="70" class="bmi-input w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary">
+                    
+                    <label class="block mt-2">Height (cm)</label>
+                    <input type="number" id="bmi-height" placeholder="e.g., 175" value="175" class="bmi-input w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary">
+                    
+                    <button id="bmi-calculate-btn" class="w-full p-3 rounded-xl bg-primary app-button text-white font-bold hover:bg-opacity-80 transition mt-4">Calculate BMI</button>
+                    
+                    <div class="pt-4 space-y-2">
+                        <p id="bmi-result" class="text-2xl font-bold text-center text-primary">Your BMI: --</p>
+                        <p id="bmi-status" class="text-xl font-semibold text-center"></p>
+                        <p id="bmi-range" class="text-sm text-gray-400 text-center border-t border-gray-600 pt-2"></p>
+                    </div>
+                </div>
+
+                <div id="health-bmr-content" class="hidden">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block">Gender</label>
+                            <select id="bmr-gender" class="bmr-input w-full p-3 rounded-lg bg-input-field">
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block">Age (Years)</label>
+                            <input type="number" id="bmr-age" placeholder="e.g., 30" value="30" class="bmr-input w-full p-3 rounded-lg bg-input-field">
+                        </div>
+                    </div>
+                    
+                    <label class="block mt-2">Weight (kg)</label>
+                    <input type="number" id="bmr-weight" placeholder="e.g., 70" value="70" class="bmr-input w-full p-3 rounded-lg bg-input-field">
+                    
+                    <label class="block mt-2">Height (cm)</label>
+                    <input type="number" id="bmr-height" placeholder="e.g., 175" value="175" class="bmr-input w-full p-3 rounded-lg bg-input-field">
+                    
+                    <label class="block mt-2">Activity Level</label>
+                    <select id="bmr-activity" class="bmr-input w-full p-3 rounded-lg bg-input-field">
+                        <option value="1.2">1.2 - Sedentary (Desk Job)</option>
+                        <option value="1.375">1.375 - Lightly Active (1-3 days/week)</option>
+                        <option value="1.55">1.55 - Moderately Active (3-5 days/week)</option>
+                        <option value="1.725">1.725 - Very Active (6-7 days/week)</option>
+                        <option value="1.9">1.9 - Extremely Active (Daily, physical job)</option>
+                    </select>
+
+                    <label class="block mt-2">Goal</label>
+                    <select id="bmr-goal" class="bmr-input w-full p-3 rounded-lg bg-input-field">
+                        <option value="Maintenance">Maintain Weight</option>
+                        <option value="Loss">Mild Loss (-500 kcal)</option>
+                        <option value="Gain">Mild Gain (+300 kcal)</option>
+                    </select>
+
+                    <button id="bmr-calculate-btn" class="w-full p-3 rounded-xl bg-primary app-button text-white font-bold hover:bg-opacity-80 transition mt-4">Calculate TDEE & Macros</button>
+
+                    <div class="pt-4 space-y-2 border-t border-gray-600 mt-4">
+                        <p id="bmr-result" class="text-xl font-bold text-center text-primary">BMR (Resting): ---</p>
+                        <p id="tdee-result" class="text-lg font-semibold text-center text-success-color">TDEE (Active): ---</p>
+                        <p id="goal-calorie-result" class="text-2xl font-bold text-center text-error-color pt-2">Goal: ---</p>
+                    </div>
+                    
+                    <div class="pt-4 border-t border-gray-600 mt-4">
+                        <h4 class="text-lg font-semibold mb-2 text-center">Macro Nutrient Split (Percentage)</h4>
+                        <div class="flex space-x-2 text-sm text-center">
+                            <div class="flex-1">
+                                <label>Protein (%)</label>
+                                <input type="number" id="bmr-protein" value="30" min="10" max="80" step="5" class="bmr-input w-full p-2 rounded-lg bg-input-field" oninput="updateCarbsPercentage()">
+                            </div>
+                            <div class="flex-1">
+                                <label>Fat (%)</label>
+                                <input type="number" id="bmr-fat" value="25" min="10" max="80" step="5" class="bmr-input w-full p-2 rounded-lg bg-input-field" oninput="updateCarbsPercentage()">
+                            </div>
+                            <div class="flex-1">
+                                <label>Carbs (%)</label>
+                                <input type="text" id="bmr-carbs" value="45" readonly class="w-full p-2 rounded-lg bg-input-field text-gray-400 cursor-not-allowed">
+                            </div>
+                        </div>
+                        <div id="macro-result" class="pt-3 text-center"></div>
+                    </div>
+
+                    <div class="w-full p-2" id="bmr-chart-container">
+                        <canvas id="bmr-bar-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div id="view-Currency-Converter" class="hidden p-4 rounded-xl shadow-xl relative pt-12" style="background-color: var(--primary-bg);">
+                <h2 class="text-2xl font-semibold mb-4 text-center">Currency Converter</h2>
+                
+                <button id="add-currency-btn" class="w-10 h-10 rounded-full bg-primary app-button hover:bg-opacity-80 transition flex items-center justify-center p-2 text-white shadow-lg absolute right-4 top-4 z-10">
+                    <i data-lucide="plus" class="w-5 h-5"></i>
+                </button>
+
+                <div class="space-y-4">
+                    <label class="block">Amount to Convert</label>
+                    <input type="number" id="currency-input" value="100" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary" oninput="handleCurrencyConvert()">
+                    
+                    <div class="flex space-x-2">
+                        <div class="flex-1">
+                            <label class="block">From Currency</label>
+                            <select id="currency-from" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary"></select>
+                        </div>
+                        <div class="flex-1">
+                            <label class="block">To Currency</label>
+                            <select id="currency-to" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary"></select>
+                        </div>
+                    </div>
+                    
+                    <div id="currency-result" class="text-xl font-bold pt-4 text-center text-primary">Result: 0.00 USD</div>
+                </div>
+            </div>
+            
+            <div id="view-EMI-Calculator" class="hidden p-4 rounded-xl shadow-xl space-y-4" style="background-color: var(--primary-bg);">
+                <h2 class="text-2xl font-semibold mb-4 text-center">EMI Calculator (Advanced)</h2>
+                
+                <label class="block">Loan Amount (₹)</label>
+                <input type="number" id="emi-principal" placeholder="e.g., 500000" value="500000" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary" oninput="handleEMIConvert()">
+                
+                <label class="block">Annual Interest Rate (%)</label>
+                <input type="number" id="emi-rate" placeholder="e.g., 8.5" value="8.5" step="0.1" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary" oninput="handleEMIConvert()">
+                
+                <label class="block">Loan Tenure (Years)</label>
+                <input type="number" id="emi-years" placeholder="e.g., 5" value="5" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary" oninput="handleEMIConvert()">
+
+                <label class="block">Payment Frequency</label>
+                <select id="emi-frequency" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary" onchange="handleEMIConvert()">
+                    <option value="monthly">Monthly (मासिक)</option>
+                    <option value="quarterly">Quarterly (त्रैमासिक)</option>
+                    <option value="half-yearly">Half-Yearly (अर्ध-वार्षिक)</option>
+                    <option value="yearly">Yearly (वार्षिक)</option>
+                </select>
+                
+                <label class="block">Extra Payment per Period (₹)</label>
+                <input type="number" id="emi-extra-payment" placeholder="e.g., 1000 (Optional)" value="0" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary" oninput="handleEMIConvert()">
+                
+                <button id="emi-calculate-btn" class="w-full p-3 rounded-xl bg-primary app-button text-white font-bold hover:bg-opacity-80 transition mt-4" onclick="handleEMIConvert()">Calculate EMI</button>
+                
+                <div class="pt-4 space-y-2">
+                    <p id="emi-result" class="text-2xl font-bold text-center text-primary">EMI: ---</p>
+                    <p id="emi-total-interest" class="text-base text-gray-300 text-center">Total Interest: ---</p>
+                    <p id="emi-total-payment" class="text-lg font-semibold text-center border-t border-gray-600 pt-2">Total Payment: ---</p>
+                </div>
+                
+                <div id="emi-prepayment-note"></div>
+                
+                <hr class="border-gray-600 my-4">
+
+                <div class="md:flex md:space-x-4">
+                    <div class="w-full md:w-1/2 p-2" id="emi-chart-container">
+                        <h3 class="text-lg font-semibold text-center mb-2">Principal vs Interest</h3>
+                        <canvas id="emi-pie-chart"></canvas>
+                    </div>
+                </div>
+
+                <div class="pt-4">
+                    <h3 class="text-lg font-semibold mb-2">Amortization Schedule (भुगतान तालिका)</h3>
+                    <div class="amortization-table-container bg-[var(--primary-bg)] rounded-xl shadow-inner">
+                        <table class="w-full amortization-table">
+                            <thead>
+                                <tr>
+                                    <th class="w-1/12">Period</th>
+                                    <th class="w-3/12">Total Pmt.</th>
+                                    <th class="w-3/12 text-primary">Principal</th>
+                                    <th class="w-3/12 text-success-color">Interest</th>
+                                    <th class="w-2/12">Balance</th>
+                                </tr>
+                            </thead>
+                            <tbody id="amortization-table-body">
+                                <tr><td colspan="5" class="text-center text-gray-400">Enter details to see schedule.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="view-SIP-Calculator" class="hidden p-4 rounded-xl shadow-xl space-y-4" style="background-color: var(--primary-bg);">
+                <h2 class="text-2xl font-semibold mb-4 text-center">SIP Calculator (Step-up)</h2>
+                
+                <label class="block">Monthly Investment (₹)</label>
+                <input type="number" id="sip-monthly-investment" placeholder="e.g., 5000" value="5000" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary" oninput="handleSIPCalculate()">
+                
+                <label class="block">Expected Annual Rate of Return (%)</label>
+                <input type="number" id="sip-rate" placeholder="e.g., 12" value="12" step="0.1" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary" oninput="handleSIPCalculate()">
+                
+                <label class="block">Investment Period (Years)</label>
+                <input type="number" id="sip-years" placeholder="e.g., 10" value="10" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary" oninput="handleSIPCalculate()">
+
+                <label class="block">Annual Step-up Rate (%)</label>
+                <input type="number" id="sip-step-up" placeholder="e.g., 5 (Optional)" value="5" step="0.1" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary" oninput="handleSIPCalculate()">
+                
+                <button id="sip-calculate-btn" class="w-full p-3 rounded-xl bg-primary app-button text-white font-bold hover:bg-opacity-80 transition mt-4" onclick="handleSIPCalculate()">Calculate SIP</button>
+                
+                <div class="pt-4 space-y-2">
+                    <p id="sip-result" class="text-2xl font-bold text-center text-primary">Estimated Wealth: ---</p>
+                    <p id="sip-invested-amount" class="text-base text-gray-300 text-center">Total Invested: ---</p>
+                    <p id="sip-returns" class="text-lg font-semibold text-center border-t border-gray-600 pt-2">Total Returns: ---</p>
+                    <p id="sip-total-wealth" class="text-lg font-semibold text-center text-success-color pt-1">Total Wealth: ---</p>
+                </div>
+                
+                <hr class="border-gray-600 my-4">
+
+                <div class="md:flex md:space-x-4">
+                    <div class="w-full md:w-1/2 p-2" id="sip-chart-container">
+                        <h3 class="text-lg font-semibold text-center mb-2">Investment vs. Returns</h3>
+                        <canvas id="sip-pie-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="view-Notepad" class="hidden p-4 relative min-h-[calc(100vh-140px)]" style="background-color: var(--secondary-bg);">
+                <h2 class="text-2xl font-bold mb-4 text-center text-primary">Task & Note Manager</h2>
+                
+                <div class="flex flex-wrap justify-center gap-2 mb-6 p-2 rounded-xl bg-[var(--primary-bg)] sticky top-20 z-10">
+                    <button data-filter="All" id="filter-btn-All" class="note-filter-btn p-2 text-xs rounded-full bg-[var(--input-bg)] transition active filter-active" onclick="applyNoteFilter('All')">All</button>
+                    <button data-filter="Task" id="filter-btn-Task" class="note-filter-btn p-2 text-xs rounded-full bg-[var(--input-bg)] transition" onclick="applyNoteFilter('Task')">Tasks</button>
+                    <button data-filter="Note" id="filter-btn-Note" class="note-filter-btn p-2 text-xs rounded-full bg-[var(--input-bg)] transition" onclick="applyNoteFilter('Note')">Notes</button>
+                    <button data-filter="Pending" id="filter-btn-Pending" class="note-filter-btn p-2 text-xs rounded-full bg-[var(--input-bg)] transition" onclick="applyNoteFilter('Pending')">Pending</button>
+                    <button data-filter="Completed" id="filter-btn-Completed" class="note-filter-btn p-2 text-xs rounded-full bg-[var(--input-bg)] transition" onclick="applyNoteFilter('Completed')">Completed</button>
+                </div>
+                <div id="notes-list" class="space-y-3">
+                    </div>
+                
+                <button id="open-add-note-modal-btn" class="w-16 h-16 rounded-full bg-primary app-button text-white shadow-xl fixed right-8 bottom-8 z-30 flex items-center justify-center transition hover:scale-105">
+                     <i data-lucide="plus" class="w-8 h-8"></i>
+                </button>
+            </div>
+            
+            <div id="view-Calendar" class="hidden p-4 rounded-xl shadow-xl space-y-4" style="background-color: var(--primary-bg);">
+                <h2 class="text-2xl font-semibold mb-4 text-center">Calendar & Events</h2>
+                
+                <div class="flex justify-between items-center p-2 rounded-xl bg-[var(--input-bg)]">
+                    <button id="prev-month-btn" class="p-2 rounded-full hover:bg-secondary-btn transition">
+                        <i data-lucide="chevron-left" class="w-6 h-6"></i>
+                    </button>
+                    <span id="calendar-month-year" class="text-xl font-bold">Month Year</span>
+                    <button id="next-month-btn" class="p-2 rounded-full hover:bg-secondary-btn transition">
+                        <i data-lucide="chevron-right" class="w-6 h-6"></i>
+                    </button>
+                </div>
+                
+                <div id="calendar-grid" class="calendar-grid text-white text-center p-2 rounded-xl bg-[var(--input-bg)]">
+                    </div>
+                
+                <h3 id="selected-day-display" class="hidden"></h3>
+                <div id="events-list" class="hidden"></div>
+                <button id="add-event-btn" class="hidden"></button>
+            </div>
+
+
+        </main>
+    </div>
+    
+    <div id="slide-menu" class="fixed top-0 left-0 w-64 h-full p-6 shadow-2xl" style="background-color: var(--secondary-bg);">
+        <h2 class="text-2xl font-bold mb-8 text-primary">App Menu</h2>
+        <ul class="space-y-3">
+            <li><button class="nav-link w-full text-left p-3 rounded-lg hover:bg-[var(--primary-bg)] transition flex items-center space-x-3" data-view="Calculator"><i data-lucide="calculator" class="w-5 h-5"></i><span>Calculator</span></button></li>
+            <li><button class="nav-link w-full text-left p-3 rounded-lg hover:bg-[var(--primary-bg)] transition flex items-center space-x-3" data-view="Unit Converter"><i data-lucide="ruler" class="w-5 h-5"></i><span>Unit Converter</span></button></li>
+            <li><button class="nav-link w-full text-left p-3 rounded-lg hover:bg-[var(--primary-bg)] transition flex items-center space-x-3" data-view="Health Calculator"><i data-lucide="thermometer" class="w-5 h-5"></i><span>Health & Fitness</span></button></li>
+            <li><button class="nav-link w-full text-left p-3 rounded-lg hover:bg-[var(--primary-bg)] transition flex items-center space-x-3" data-view="Currency Converter"><i data-lucide="dollar-sign" class="w-5 h-5"></i><span>Currency Converter</span></button></li>
+            <li><button class="nav-link w-full text-left p-3 rounded-lg hover:bg-[var(--primary-bg)] transition flex items-center space-x-3" data-view="EMI Calculator"><i data-lucide="wallet" class="w-5 h-5"></i><span>EMI Calculator</span></button></li>
+            <li><button class="nav-link w-full text-left p-3 rounded-lg hover:bg-[var(--primary-bg)] transition flex items-center space-x-3" data-view="SIP Calculator"><i data-lucide="trending-up" class="w-5 h-5"></i><span>SIP Calculator</span></button></li>
+            <li><button class="nav-link w-full text-left p-3 rounded-lg hover:bg-[var(--primary-bg)] transition flex items-center space-x-3" data-view="Notepad"><i data-lucide="book-open" class="w-5 h-5"></i><span>Task & Note Manager</span></button></li>
+            <li><button class="nav-link w-full text-left p-3 rounded-lg hover:bg-[var(--primary-bg)] transition flex items-center space-x-3" data-view="Calendar"><i data-lucide="calendar" class="w-5 h-5"></i><span>Calendar & Events</span></button></li>
+            </ul>
+    </div>
+    <div id="menu-backdrop" class="fixed inset-0 bg-black opacity-0 pointer-events-none transition duration-300 z-40" onclick="toggleMenu()"></div>
+
+    <div id="settings-modal" class="hidden fixed inset-0 z-50 flex justify-end">
+        <div id="settings-modal-backdrop" class="fixed inset-0" onclick="toggleSettingsModal(false)"></div>
+        
+        <div id="settings-modal-content" class="w-full max-w-sm p-6 shadow-2xl relative" style="background-color: var(--secondary-bg);">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold text-primary">Settings</h3>
+                <button id="close-settings-modal" class="text-gray-400 hover:text-white transition">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-4 max-h-[85vh] overflow-y-auto pr-2">
+                
+                <div>
+                    <label class="block text-sm font-medium mb-1">Theme Selection</label>
+                    <select id="setting-theme" class="setting-input w-full p-2 rounded-lg bg-input-field border-gray-600">
+                        <option value="Dark Default">Dark Default</option>
+                        <option value="Light Default">Light Default</option>
+                        <option value="Blue Dark">Blue Dark</option>
+                        <option value="Green Dark">Green Dark</option>
+                        <option value="Custom">Custom</option>
+                    </select>
+                </div>
+                
+                <div class="border-t border-[var(--input-bg)] pt-4 mt-4">
+                    <button id="customize-theme-btn" class="w-full p-3 rounded-xl bg-primary text-white font-bold transition flex items-center justify-center space-x-2" disabled>
+                         <i data-lucide="palette" class="w-5 h-5"></i>
+                        <span>Customize Theme</span>
+                    </button>
+                    <p class="text-xs text-gray-400 mt-1 text-center">This button is enabled when 'Custom' theme is selected.</p>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium mb-1">Click Button Sound</label>
+                    <div class="flex space-x-2">
+                        <select id="setting-soundTone" class="setting-input flex-1 p-2 rounded-lg bg-input-field border-gray-600">
+                            <option value="Tone 1">Tone 1 (Default)</option>
+                            <option value="Tone 2">Tone 2 (Higher)</option>
+                            <option value="Tone 3">Tone 3 (Pitchy)</option>
+                            <option value="Tone 4">Tone 4 (Bass)</option>
+                            <option value="Tone 5">Tone 5 (Chime)</option>
+                        </select>
+                        <label class="flex items-center space-x-2">
+                            <input type="checkbox" id="setting-soundOn" class="setting-input w-5 h-5 rounded text-primary bg-input-field border-gray-600" checked>
+                            <span class="text-sm">Sound On/Off</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium mb-1">Language Selection</label>
+                    <select id="setting-language" class="setting-input w-full p-2 rounded-lg bg-input-field border-gray-600">
+                        <option value="English">English</option>
+                        <option value="Hindi">Hindi (Interface remains English)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium mb-1">Calculator Design</label>
+                    <select id="setting-calcDesign" class="setting-input w-full p-2 rounded-lg bg-input-field border-gray-600">
+                        <option value="Classic">Classic (Default)</option>
+                        <option value="Rounded">Rounded</option>
+                        <option value="Minimalist">Minimalist</option>
+                        <option value="Grid">Grid</option>
+                        <option value="Flat">Flat</option>
+                    </select>
+                </div>
+
+            </div>
+            
+            <p class="text-xs text-gray-500 mt-4 text-center">Settings are automatically saved via Local Storage.</p>
+        </div>
+    </div>
+    
+    <div id="custom-theme-modal" class="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-80">
+        <div class="bg-[var(--primary-bg)] w-full max-w-lg rounded-2xl p-6 shadow-2xl transform scale-100 transition duration-300">
+            <h3 class="text-2xl font-bold mb-6 text-primary text-center">Custom Theme Color Settings</h3>
+            
+            <div class="space-y-3 max-h-96 overflow-y-auto pr-2">
+                
+                <div class="flex items-center justify-between">
+                    <label class="text-sm font-medium">App Background Color</label>
+                    <input type="color" id="custom-color-secondary_bg" class="w-16 h-8 p-1 rounded-md bg-input-field">
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <label class="text-sm font-medium">Primary / Accent Color</label>
+                    <input type="color" id="custom-color-primary_color" class="w-16 h-8 p-1 rounded-md bg-input-field">
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <label class="text-sm font-medium">Tool Card / Header Background</label>
+                    <input type="color" id="custom-color-primary_bg" class="w-16 h-8 p-1 rounded-md bg-input-field">
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <label class="text-sm font-medium">Input Field Background</label>
+                    <input type="color" id="custom-color-input_bg" class="w-16 h-8 p-1 rounded-md bg-input-field">
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <label class="text-sm font-medium">Secondary Button Color (Numbers)</label>
+                    <input type="color" id="custom-color-secondary_btn_bg" class="w-16 h-8 p-1 rounded-md bg-input-field">
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <label class="text-sm font-medium">Text Color</label>
+                    <input type="color" id="custom-color-text_color" class="w-16 h-8 p-1 rounded-md bg-input-field">
+                </div>
+                
+                <div class="flex items-center justify-between border-t border-gray-600 pt-3 mt-3">
+                    <label class="text-sm font-medium">Success / Normal Indicator</label>
+                    <input type="color" id="custom-color-success_color" class="w-16 h-8 p-1 rounded-md bg-input-field">
+                </div>
+                
+                <div class="flex items-center justify-between">
+                    <label class="text-sm font-medium">Error / Obesity Indicator</label>
+                    <input type="color" id="custom-color-error_color" class="w-16 h-8 p-1 rounded-md bg-input-field">
+                </div>
+
+                <div class="flex items-center justify-between border-t border-gray-600 pt-3 mt-3">
+                    <label class="text-sm font-medium">Priority High Color</label>
+                    <input type="color" id="custom-color-priority_high" class="w-16 h-8 p-1 rounded-md bg-input-field">
+                </div>
+                <div class="flex items-center justify-between">
+                    <label class="text-sm font-medium">Priority Medium Color</label>
+                    <input type="color" id="custom-color-priority_medium" class="w-16 h-8 p-1 rounded-md bg-input-field">
+                </div>
+                <div class="flex items-center justify-between">
+                    <label class="text-sm font-medium">Priority Low Color</label>
+                    <input type="color" id="custom-color-priority_low" class="w-16 h-8 p-1 rounded-md bg-input-field">
+                </div>
+            </div>
+
+            <div class="flex space-x-4 mt-6">
+                <button id="custom-theme-cancel-btn" class="flex-1 p-3 rounded-xl bg-gray-600 text-white font-bold hover:bg-gray-500 transition">
+                    Cancel
+                </button>
+                <button id="custom-theme-save-btn" class="flex-1 p-3 rounded-xl bg-primary text-white font-bold hover:bg-opacity-80 transition">
+                    Save Theme
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <div id="add-item-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 p-4">
+        <div class="w-full max-w-md rounded-2xl p-6 shadow-2xl" style="background-color: var(--primary-bg);">
+            <div class="flex justify-between items-center mb-6">
+                <h3 id="add-item-title" class="text-2xl font-bold text-primary">Add New Item</h3>
+                <button id="close-add-item-modal" class="text-gray-400 hover:text-white transition">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-4">
+                
+                <div id="unit-category-div" class="hidden"> 
+                    <label class="block text-sm font-medium mb-1">Select Unit Category</label>
+                    <select id="unit-category-select" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary">
+                        </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium mb-1">Name / Code</label>
+                    <input type="text" id="item-name-input" placeholder="e.g., Custom Unit (CU) or ZWL - Zimbabwe Dollar" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary">
+                </div>
+                
+                <div>
+                    <label id="item-factor-label" class="block text-sm font-medium mb-1">Conversion Factor</label>
+                    <input type="number" id="item-factor-input" placeholder="e.g., 1000 or 361.90" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary">
+                    <p id="item-factor-help" class="text-xs text-gray-400 mt-1">Details on factor/rate...</p>
+                </div>
+            </div>
+
+            <button id="add-item-submit-btn" class="w-full p-3 rounded-xl bg-primary app-button text-white font-bold hover:bg-opacity-80 transition mt-6">
+                Add Item to Custom List
+            </button>
+            
+            <p class="text-xs text-gray-500 mt-4 text-center">Note: Custom items are saved to your browser's Local Storage but will now appear automatically in dropdowns.</p>
+        </div>
+    </div>
+    
+    <div id="add-edit-note-modal" class="fixed inset-0 z-50 bg-[var(--secondary-bg)] flex flex-col transition duration-200">
+        <header class="flex justify-between items-center p-4 shadow-md sticky top-0 bg-[var(--primary-bg)]">
+            <button id="note-cancel-btn" class="w-10 h-10 rounded-full text-gray-400 hover:text-white transition flex items-center justify-center">
+                <i data-lucide="x" class="w-6 h-6"></i>
+            </button>
+            <h3 class="text-xl font-bold text-primary">Edit Note/Task</h3>
+            <div class="flex space-x-2">
+                <button id="note-delete-btn" class="w-10 h-10 rounded-full text-error-color hover:text-opacity-80 transition flex items-center justify-center hidden">
+                     <i data-lucide="trash-2" class="w-6 h-6"></i>
+                </button>
+                <button id="note-save-btn" class="w-10 h-10 rounded-full bg-primary text-white hover:bg-opacity-80 transition flex items-center justify-center">
+                    <i data-lucide="check" class="w-6 h-6"></i>
+                </button>
+            </div>
+        </header>
+        
+        <div class="p-4 flex-grow overflow-y-auto space-y-4">
+            
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Type</label>
+                    <select id="note-type-select" class="w-full p-3 rounded-lg bg-input-field focus:ring-primary focus:border-primary">
+                        <option value="Task">Task</option>
+                        <option value="Note">Note</option>
+                    </select>
+                </div>
+                <div id="task-fields-container" class="space-y-4 col-span-2 hidden p-2 rounded-xl" style="background-color: var(--input-bg);">
+                    <div class="grid grid-cols-2 gap-4">
+                         <div>
+                            <label class="block text-sm font-medium mb-1">Priority</label>
+                            <select id="note-priority-select" class="w-full p-3 rounded-lg bg-[var(--primary-bg)] focus:ring-primary focus:border-primary">
+                                <option value="High" style="color: var(--priority-high);">High</option>
+                                <option value="Medium" style="color: var(--priority-medium);">Medium</option>
+                                <option value="Low" style="color: var(--priority-low);">Low</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Due Date</label>
+                            <input type="date" id="note-due-date-input" class="w-full p-3 rounded-lg bg-[var(--primary-bg)] focus:ring-primary focus:border-primary">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <input type="text" id="note-title-input-modal" placeholder="Title (Required)" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary text-2xl font-bold border-none" style="background-color: var(--primary-bg);">
+            <textarea id="note-content-input-modal" placeholder="Start writing your note details here..." rows="20" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary flex-grow resize-none text-base" style="background-color: var(--input-bg); min-height: 70vh;"></textarea>
+        </div>
+    </div>
+    
+    <div id="event-details-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 p-4">
+        <div class="w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto" style="background-color: var(--secondary-bg);">
+            <div class="flex justify-between items-center mb-4 sticky top-0 bg-[var(--secondary-bg)] pt-1 z-10">
+                <h3 id="event-modal-date-display" class="text-xl font-bold text-primary">Selected Date</h3>
+                <button id="close-event-details-modal" class="text-gray-400 hover:text-white transition">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            
+            <input type="hidden" id="event-modal-hidden-date">
+            
+            <h4 class="text-lg font-semibold border-b border-[var(--input-bg)] pb-2">Events Scheduled</h4>
+            <div id="event-modal-list" class="space-y-3">
+                </div>
+            
+            <button id="add-event-toggle-btn" class="w-full p-3 rounded-xl bg-primary app-button text-white font-bold hover:bg-opacity-80 transition mt-4">
+                Add New Event
+            </button>
+
+            <div id="add-event-form-container" class="space-y-3 p-4 rounded-xl border border-[var(--input-bg)] hidden" style="background-color: var(--primary-bg);">
+                <h4 class="text-lg font-semibold text-primary">New Event Details</h4>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Time</label>
+                    <input type="time" id="new-event-time-input" value="10:00" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Event Title</label>
+                    <input type="text" id="new-event-title-input" placeholder="e.g., Meeting with John Doe" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary">
+                </div>
+                <button id="save-new-event-btn" class="w-full p-3 rounded-xl bg-success-color app-button text-white font-bold hover:opacity-80 transition">
+                    Save Event to Selected Date
+                </button>
+            </div>
+            
+        </div>
+    </div>
+
+
+    <div id="custom-alert-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-70 p-4">
+        <div class="bg-white w-full max-w-sm rounded-lg p-6 shadow-xl dark:bg-gray-800 dark:text-white">
+            <h4 id="alert-title" class="text-xl font-bold mb-2"></h4>
+            <p id="alert-message" class="text-gray-600 dark:text-gray-300"></p>
+        </div>
+    </div>
+
+</body>
+</html>
 
