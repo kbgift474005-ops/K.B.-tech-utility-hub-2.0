@@ -1,69 +1,54 @@
-const CACHE_NAME = 'kb-calc-v1';
-const urlsToCache = [
-    '/',
-    '/index.html',
-    // --- आपकी CSS/JS/LIBRARIES ---
-    'https://cdn.tailwindcss.com',
-    'https://unpkg.com/lucide@latest',
-    'https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js',
-    // --- Icons (मान लें कि ये रूट फोल्डर में हैं) ---
-    '/icons/icon-192x192.png',
-    '/icons/icon-512x512.png'
-];
+// This is the service worker with the combined offline experience (Offline page + Offline copy of pages)
 
-// 1. इंस्टॉलेशन: आवश्यक फ़ाइलों को कैश करें
-self.addEventListener('install', (event) => {
-    event.waitUntil(
-        caches.open(CACHE_NAME)
-            .then((cache) => {
-                console.log('Opened cache and adding assets.');
-                return cache.addAll(urlsToCache);
-            })
-            .catch(err => {
-                console.error('Failed to cache required assets:', err);
-            })
-    );
+const CACHE = "pwabuilder-offline-page";
+
+importScripts('https://storage.googleapis.com/workbox-cdn/releases/5.1.2/workbox-sw.js');
+
+// TODO: replace the following with the correct offline fallback page i.e.: const offlineFallbackPage = "offline.html";
+const offlineFallbackPage = "ToDo-replace-this-name.html";
+
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
-// 2. फ़ेच: कैश से या नेटवर्क से डेटा दें
+self.addEventListener('install', async (event) => {
+  event.waitUntil(
+    caches.open(CACHE)
+      .then((cache) => cache.add(offlineFallbackPage))
+  );
+});
+
+if (workbox.navigationPreload.isSupported()) {
+  workbox.navigationPreload.enable();
+}
+
+workbox.routing.registerRoute(
+  new RegExp('/*'),
+  new workbox.strategies.StaleWhileRevalidate({
+    cacheName: CACHE
+  })
+);
+
 self.addEventListener('fetch', (event) => {
-    // केवल GET रिक्वेस्ट और http/https स्कीमा के लिए कैशिंग
-    if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) {
-        return;
-    }
-    
-    event.respondWith(
-        caches.match(event.request)
-            .then((response) => {
-                // अगर कैश में है, तो कैश से लौटाएँ
-                if (response) {
-                    return response;
-                }
-                
-                // अगर कैश में नहीं है, तो नेटवर्क से फ़ेच करें
-                return fetch(event.request);
-            })
-            .catch(() => {
-                // अगर नेटवर्क से भी फेल हो जाए (जैसे ऑफ़लाइन होने पर), 
-                // तो यहाँ आप एक ऑफ़लाइन पेज दिखा सकते हैं (जो हमने कैश किया है)
-                return caches.match('/index.html'); 
-            })
-    );
-});
+  if (event.request.mode === 'navigate') {
+    event.respondWith((async () => {
+      try {
+        const preloadResp = await event.preloadResponse;
 
-// 3. एक्टिवेशन: पुराने कैश को साफ़ करें
-self.addEventListener('activate', (event) => {
-    const cacheWhitelist = [CACHE_NAME];
-    event.waitUntil(
-        caches.keys().then((cacheNames) => {
-            return Promise.all(
-                cacheNames.map((cacheName) => {
-                    if (cacheWhitelist.indexOf(cacheName) === -1) {
-                        console.log('Deleting old cache:', cacheName);
-                        return caches.delete(cacheName);
-                    }
-                })
-            );
-        })
-    );
+        if (preloadResp) {
+          return preloadResp;
+        }
+
+        const networkResp = await fetch(event.request);
+        return networkResp;
+      } catch (error) {
+
+        const cache = await caches.open(CACHE);
+        const cachedResp = await cache.match(offlineFallbackPage);
+        return cachedResp;
+      }
+    })());
+  }
 });
