@@ -429,6 +429,13 @@
             } else if (AppState.currentView === 'Health Calculator') {
                  // Initialize the correct health sub-view
                  showHealthView(currentHealthView);
+            } else if (AppState.currentView === 'Currency Converter') {
+                 // Check if rates need to be fetched/updated when switching to view
+                 if (Object.keys(currentExchangeRates).length <= Object.keys(staticBaseRates).length) {
+                     fetchLiveExchangeRates(true);
+                 } else {
+                     handleCurrencyConvert(); // Just convert if rates are loaded
+                 }
             }
         }
         
@@ -603,6 +610,8 @@
         const CUSTOM_CURRENCIES_KEY = 'calc_app_custom_currencies';
         const NOTES_KEY = 'calc_app_notes';
         const EVENTS_KEY = 'calc_app_events';
+        const RATES_KEY = 'calc_app_live_rates'; // NEW: Key for live rates
+
         
         function loadSettingsFromLocal() {
             try {
@@ -633,6 +642,15 @@
                     });
                     nextEventId = maxEventId + 1;
                 }
+                
+                // NEW: Load live rates from local storage
+                const storedRates = localStorage.getItem(RATES_KEY);
+                if (storedRates) {
+                    const parsedRates = JSON.parse(storedRates);
+                    currentExchangeRates = parsedRates.rates || {...staticBaseRates};
+                    // console.log("Loaded cached rates:", currentExchangeRates);
+                }
+
 
             } catch (e) {
                 console.error("Error loading settings/data from Local Storage:", e);
@@ -669,6 +687,7 @@
         function initApp() {
             loadSettingsFromLocal();
             document.getElementById('user-id-display').textContent = 'User ID: Local Mode'; 
+            fetchLiveExchangeRates(); // Initial fetch for live rates
         }
         
         function handleCustomThemeSave() {
@@ -950,9 +969,9 @@
                              units.push(unitName);
                          }
                      } else if (category && (category === 'Temperature' || category === 'FuelConsumption')) {
-                         console.warn(`Custom unit "${unitName}" cannot be added to the ${category} category (Special logic required).`);
+                         // console.warn(`Custom unit "${unitName}" cannot be added to the ${category} category (Special logic required).`);
                      } else if (category) {
-                         console.warn(`Custom unit "${unitName}" specifies an invalid category "${category}".`);
+                         // console.warn(`Custom unit "${unitName}" specifies an invalid category "${category}".`);
                      }
                  }
              }
@@ -1040,9 +1059,7 @@
             newCategoryEl.value = 'Length';
             newCategoryEl.dispatchEvent(new Event('change'));
             
-            document.getElementById('unit-input').addEventListener('input', handleUnitConvert);
-            fromEl.addEventListener('change', handleUnitConvert);
-            toEl.addEventListener('change', handleUnitConvert);
+            // Event listeners added in window.onload
         }
 
         function simulateAddUnit() {
@@ -1247,8 +1264,10 @@
         }
 
 
-        // --- CURRENCY CONVERTER LOGIC (UNTOUCHED) ---
-        const baseExchangeRates = {
+        // --- CURRENCY CONVERTER LOGIC (MODIFIED FOR LIVE RATES) ---
+        
+        // Static rates used as fallback if API fails
+        const staticBaseRates = {
             'USD - US Dollar': 1.00,
             'EUR - Euro': 0.92,
             'JPY - Japanese Yen': 156.40,
@@ -1269,9 +1288,60 @@
             'PLN - Polish Złoty': 4.00,
         };
         
-        function getExchangeRates() {
+        let currentExchangeRates = {...staticBaseRates}; // Will be updated by API
+        
+        async function fetchLiveExchangeRates(forceConvert = false) {
+             const statusEl = document.getElementById('currency-fetch-status');
+             if (statusEl) statusEl.textContent = 'Fetching live rates...';
+
+             // Using a common free public API as an example, rates are based on USD.
+             const API_URL = 'https://api.exchangerate-api.com/v4/latest/USD'; 
+             
+             try {
+                 const response = await fetch(API_URL);
+                 if (!response.ok) throw new Error('API fetch failed');
+                 
+                 const data = await response.json();
+                 
+                 // Map the fetched rates to the desired format (Code - Name: Rate)
+                 const newRates = {};
+                 const codeToName = (code) => {
+                    // Simple logic to map codes to names for the list, falling back to just the code
+                    const staticMatch = Object.keys(staticBaseRates).find(key => key.startsWith(code));
+                    return staticMatch || `${code} - ${code} Currency`; 
+                 };
+                 
+                 if (data.rates) {
+                     for (const code in data.rates) {
+                         // Only map major currencies or use the static map names
+                         const name = codeToName(code);
+                         newRates[name] = data.rates[code];
+                     }
+                 }
+                 
+                 // Combine static base rates (for names) and new rates, preferring the new rate
+                 currentExchangeRates = {...staticBaseRates, ...newRates};
+                 
+                 // Save the new rates to local storage
+                 localStorage.setItem(RATES_KEY, JSON.stringify({ rates: currentExchangeRates, fetched: Date.now() }));
+
+                 if (statusEl) statusEl.textContent = `Rates updated: ${new Date().toLocaleTimeString()} (Live via API)`;
+                 
+             } catch (error) {
+                 // console.error("Could not fetch live rates, using cached/static rates:", error);
+                 currentExchangeRates = getExchangeRates(true); // Fallback logic
+                 if (statusEl) statusEl.textContent = 'Error fetching live rates. Using cached/static rates.';
+             }
+             
+             populateCurrencyDropdowns();
+             if (forceConvert) handleCurrencyConvert();
+        }
+
+
+        function getExchangeRates(useStaticOnly = false) {
             const customCurrencies = loadCustomItems(CUSTOM_CURRENCIES_KEY);
-            return {...baseExchangeRates, ...customCurrencies};
+            const baseRates = useStaticOnly ? staticBaseRates : currentExchangeRates;
+            return {...baseRates, ...customCurrencies};
         }
         
         function populateCurrencyDropdowns() {
@@ -1279,6 +1349,11 @@
             const toEl = document.getElementById('currency-to');
             const exchangeRates = getExchangeRates(); 
             const currencyList = Object.keys(exchangeRates).sort(); 
+
+            // Save current selection to restore after update
+            const selectedFrom = fromEl.value;
+            const selectedTo = toEl.value;
+
 
             fromEl.innerHTML = '';
             toEl.innerHTML = '';
@@ -1294,8 +1369,10 @@
                 opt2.textContent = currency;
                 toEl.appendChild(opt2);
             });
-            fromEl.value = exchangeRates['INR - Indian Rupee'] ? 'INR - Indian Rupee' : currencyList[0];
-            toEl.value = exchangeRates['USD - US Dollar'] ? 'USD - US Dollar' : currencyList[1];
+            
+            // Restore previous selection or set default
+            fromEl.value = selectedFrom || (exchangeRates['INR - Indian Rupee'] ? 'INR - Indian Rupee' : currencyList[0]);
+            toEl.value = selectedTo || (exchangeRates['USD - US Dollar'] ? 'USD - US Dollar' : currencyList[1]);
         }
 
         function handleCurrencyConvert() {
@@ -1406,7 +1483,7 @@
                 period++;
                 
                 let interestPayment = currentPrincipal * periodicRate;
-                originalTotalInterest += interestPayment;
+                originalTotalInterest += interestPayment; // Calculate original interest *before* early payoff shortens the loop
 
                 let principalPayment = effectivePayment - interestPayment;
                 
@@ -1734,7 +1811,7 @@
                 const stored = JSON.parse(localStorage.getItem(key)) || {};
                 return stored; 
             } catch (e) {
-                console.error("Error loading custom items:", e);
+                // console.error("Error loading custom items:", e);
                 return {};
             }
         }
@@ -1754,7 +1831,7 @@
                 localStorage.setItem(key, JSON.stringify(customItems));
                 return true;
             } catch (e) {
-                console.error("Error saving custom item to Local Storage:", e);
+                // console.error("Error saving custom item to Local Storage:", e);
                 return false;
             }
         }
@@ -2297,12 +2374,16 @@
             
             document.getElementById('scientific-toggle').addEventListener('click', toggleScientific);
             
-            // Health Calculator Listeners (Updated to use correct classes)
+            // Health Calculator Listeners (Events centralized here, HTML on* removed)
             document.querySelectorAll('.bmi-input').forEach(input => input.addEventListener('input', calculateBMI));
             document.getElementById('bmi-calculate-btn').addEventListener('click', calculateBMI);
-
+            document.getElementById('bmi-gender').addEventListener('change', calculateBMI); // Added explicitly
+            
             document.querySelectorAll('.bmr-input').forEach(input => input.addEventListener('input', calculateBMR));
             document.getElementById('bmr-calculate-btn').addEventListener('click', calculateBMR);
+            document.getElementById('bmr-gender').addEventListener('change', calculateBMR);
+            document.getElementById('bmr-activity').addEventListener('change', calculateBMR);
+            document.getElementById('bmr-goal').addEventListener('change', calculateBMR);
             
             document.getElementById('bmr-protein').addEventListener('input', updateCarbsPercentage);
             document.getElementById('bmr-fat').addEventListener('input', updateCarbsPercentage);
@@ -2313,11 +2394,14 @@
 
             document.getElementById('add-unit-btn').addEventListener('click', simulateAddUnit);
 
+            // Currency Listeners
             document.getElementById('add-currency-btn').addEventListener('click', simulateAddCurrency);
             document.getElementById('currency-input').addEventListener('input', handleCurrencyConvert);
             document.getElementById('currency-from').addEventListener('change', handleCurrencyConvert);
             document.getElementById('currency-to').addEventListener('change', handleCurrencyConvert);
-            
+            document.getElementById('refresh-currency-btn').addEventListener('click', () => fetchLiveExchangeRates(true)); // NEW refresh button
+
+            // EMI Listeners
             document.getElementById('emi-principal').addEventListener('input', handleEMIConvert);
             document.getElementById('emi-rate').addEventListener('input', handleEMIConvert);
             document.getElementById('emi-years').addEventListener('input', handleEMIConvert);
@@ -2325,6 +2409,7 @@
             document.getElementById('emi-extra-payment').addEventListener('input', handleEMIConvert); 
             document.getElementById('emi-calculate-btn').addEventListener('click', handleEMIConvert);
 
+            // SIP Listeners
             document.getElementById('sip-monthly-investment').addEventListener('input', handleSIPCalculate);
             document.getElementById('sip-rate').addEventListener('input', handleSIPCalculate);
             document.getElementById('sip-years').addEventListener('input', handleSIPCalculate);
@@ -2355,9 +2440,9 @@
 
 
             lucide.createIcons();
-            handleCurrencyConvert(); 
+            // Initial calculations
             calculateBMI(); 
-            calculateBMR(); // Initialize BMR
+            calculateBMR(); 
             handleEMIConvert(); 
             handleSIPCalculate(); 
             
@@ -2366,18 +2451,18 @@
             window.openEventDetailsModal = openEventDetailsModal; 
             window.toggleTaskCompletion = toggleTaskCompletion; 
             window.applyNoteFilter = applyNoteFilter; 
-            window.calculateBMI = calculateBMI; // Expose global function
-            window.calculateBMR = calculateBMR; // Expose global function
-            window.updateCarbsPercentage = updateCarbsPercentage; // Expose global function
+            window.calculateBMI = calculateBMI; 
+            window.calculateBMR = calculateBMR; 
+            window.updateCarbsPercentage = updateCarbsPercentage; 
 
             
-            // Service Worker Registration
+            // Service Worker Registration (Your code was correct)
             if ('serviceWorker' in navigator) {
                 window.addEventListener('load', () => {
                     navigator.serviceWorker.register('/service-worker.js').then(registration => {
-                        console.log('SW registered: ', registration);
+                        // console.log('SW registered: ', registration);
                     }).catch(registrationError => {
-                        console.log('SW registration failed: ', registrationError);
+                        // console.log('SW registration failed: ', registrationError);
                     });
                 });
             }
@@ -2492,13 +2577,13 @@
                 <h2 class="text-2xl font-semibold mb-2 text-center">Health & Fitness Planner</h2>
                 
                 <div class="flex justify-around border-b border-[var(--input-bg)] mb-4">
-                    <button id="tab-bmi" class="health-tab p-3 w-1/2 text-center text-lg active" onclick="showHealthView('BMI')">BMI Calculator</button>
-                    <button id="tab-bmr" class="health-tab p-3 w-1/2 text-center text-lg" onclick="showHealthView('BMR')">BMR/TDEE Planner</button>
+                    <button id="tab-bmi" class="health-tab p-3 w-1/2 text-center text-lg active">BMI Calculator</button>
+                    <button id="tab-bmr" class="health-tab p-3 w-1/2 text-center text-lg">BMR/TDEE Planner</button>
                 </div>
                 
                 <div id="health-bmi-content">
                     <label class="block">Gender</label>
-                    <select id="bmi-gender" class="bmi-input w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary" onchange="calculateBMI()">
+                    <select id="bmi-gender" class="bmi-input w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary">
                         <option value="Male">Male</option>
                         <option value="Female">Female</option>
                     </select>
@@ -2568,11 +2653,11 @@
                         <div class="flex space-x-2 text-sm text-center">
                             <div class="flex-1">
                                 <label>Protein (%)</label>
-                                <input type="number" id="bmr-protein" value="30" min="10" max="80" step="5" class="bmr-input w-full p-2 rounded-lg bg-input-field" oninput="updateCarbsPercentage()">
+                                <input type="number" id="bmr-protein" value="30" min="10" max="80" step="5" class="bmr-input w-full p-2 rounded-lg bg-input-field">
                             </div>
                             <div class="flex-1">
                                 <label>Fat (%)</label>
-                                <input type="number" id="bmr-fat" value="25" min="10" max="80" step="5" class="bmr-input w-full p-2 rounded-lg bg-input-field" oninput="updateCarbsPercentage()">
+                                <input type="number" id="bmr-fat" value="25" min="10" max="80" step="5" class="bmr-input w-full p-2 rounded-lg bg-input-field">
                             </div>
                             <div class="flex-1">
                                 <label>Carbs (%)</label>
@@ -2588,15 +2673,22 @@
                 </div>
             </div>
             <div id="view-Currency-Converter" class="hidden p-4 rounded-xl shadow-xl relative pt-12" style="background-color: var(--primary-bg);">
-                <h2 class="text-2xl font-semibold mb-4 text-center">Currency Converter</h2>
+                <h2 class="text-2xl font-semibold mb-2 text-center">Currency Converter</h2>
                 
-                <button id="add-currency-btn" class="w-10 h-10 rounded-full bg-primary app-button hover:bg-opacity-80 transition flex items-center justify-center p-2 text-white shadow-lg absolute right-4 top-4 z-10">
-                    <i data-lucide="plus" class="w-5 h-5"></i>
-                </button>
+                <div class="flex justify-between items-center absolute right-4 top-4 z-10 space-x-2">
+                    <button id="refresh-currency-btn" class="w-10 h-10 rounded-full bg-secondary-btn hover:bg-opacity-80 transition flex items-center justify-center p-2 text-white shadow-lg">
+                        <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+                    </button>
+                    <button id="add-currency-btn" class="w-10 h-10 rounded-full bg-primary app-button hover:bg-opacity-80 transition flex items-center justify-center p-2 text-white shadow-lg">
+                        <i data-lucide="plus" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                
+                <p id="currency-fetch-status" class="text-xs text-center mb-4 text-gray-400">Loading initial data...</p>
 
                 <div class="space-y-4">
                     <label class="block">Amount to Convert</label>
-                    <input type="number" id="currency-input" value="100" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary" oninput="handleCurrencyConvert()">
+                    <input type="number" id="currency-input" value="100" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary">
                     
                     <div class="flex space-x-2">
                         <div class="flex-1">
@@ -2617,16 +2709,16 @@
                 <h2 class="text-2xl font-semibold mb-4 text-center">EMI Calculator (Advanced)</h2>
                 
                 <label class="block">Loan Amount (₹)</label>
-                <input type="number" id="emi-principal" placeholder="e.g., 500000" value="500000" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary" oninput="handleEMIConvert()">
+                <input type="number" id="emi-principal" placeholder="e.g., 500000" value="500000" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary">
                 
                 <label class="block">Annual Interest Rate (%)</label>
-                <input type="number" id="emi-rate" placeholder="e.g., 8.5" value="8.5" step="0.1" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary" oninput="handleEMIConvert()">
+                <input type="number" id="emi-rate" placeholder="e.g., 8.5" value="8.5" step="0.1" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary">
                 
                 <label class="block">Loan Tenure (Years)</label>
-                <input type="number" id="emi-years" placeholder="e.g., 5" value="5" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary" oninput="handleEMIConvert()">
+                <input type="number" id="emi-years" placeholder="e.g., 5" value="5" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary">
 
                 <label class="block">Payment Frequency</label>
-                <select id="emi-frequency" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary" onchange="handleEMIConvert()">
+                <select id="emi-frequency" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary">
                     <option value="monthly">Monthly (मासिक)</option>
                     <option value="quarterly">Quarterly (त्रैमासिक)</option>
                     <option value="half-yearly">Half-Yearly (अर्ध-वार्षिक)</option>
@@ -2634,9 +2726,9 @@
                 </select>
                 
                 <label class="block">Extra Payment per Period (₹)</label>
-                <input type="number" id="emi-extra-payment" placeholder="e.g., 1000 (Optional)" value="0" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary" oninput="handleEMIConvert()">
+                <input type="number" id="emi-extra-payment" placeholder="e.g., 1000 (Optional)" value="0" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary">
                 
-                <button id="emi-calculate-btn" class="w-full p-3 rounded-xl bg-primary app-button text-white font-bold hover:bg-opacity-80 transition mt-4" onclick="handleEMIConvert()">Calculate EMI</button>
+                <button id="emi-calculate-btn" class="w-full p-3 rounded-xl bg-primary app-button text-white font-bold hover:bg-opacity-80 transition mt-4">Calculate EMI</button>
                 
                 <div class="pt-4 space-y-2">
                     <p id="emi-result" class="text-2xl font-bold text-center text-primary">EMI: ---</p>
@@ -2680,18 +2772,18 @@
                 <h2 class="text-2xl font-semibold mb-4 text-center">SIP Calculator (Step-up)</h2>
                 
                 <label class="block">Monthly Investment (₹)</label>
-                <input type="number" id="sip-monthly-investment" placeholder="e.g., 5000" value="5000" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary" oninput="handleSIPCalculate()">
+                <input type="number" id="sip-monthly-investment" placeholder="e.g., 5000" value="5000" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary">
                 
                 <label class="block">Expected Annual Rate of Return (%)</label>
-                <input type="number" id="sip-rate" placeholder="e.g., 12" value="12" step="0.1" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary" oninput="handleSIPCalculate()">
+                <input type="number" id="sip-rate" placeholder="e.g., 12" value="12" step="0.1" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary">
                 
                 <label class="block">Investment Period (Years)</label>
-                <input type="number" id="sip-years" placeholder="e.g., 10" value="10" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary" oninput="handleSIPCalculate()">
+                <input type="number" id="sip-years" placeholder="e.g., 10" value="10" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary">
 
                 <label class="block">Annual Step-up Rate (%)</label>
-                <input type="number" id="sip-step-up" placeholder="e.g., 5 (Optional)" value="5" step="0.1" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary" oninput="handleSIPCalculate()">
+                <input type="number" id="sip-step-up" placeholder="e.g., 5 (Optional)" value="5" step="0.1" class="w-full p-3 rounded-lg bg-input-field border-gray-600 focus:ring-primary focus:border-primary">
                 
-                <button id="sip-calculate-btn" class="w-full p-3 rounded-xl bg-primary app-button text-white font-bold hover:bg-opacity-80 transition mt-4" onclick="handleSIPCalculate()">Calculate SIP</button>
+                <button id="sip-calculate-btn" class="w-full p-3 rounded-xl bg-primary app-button text-white font-bold hover:bg-opacity-80 transition mt-4">Calculate SIP</button>
                 
                 <div class="pt-4 space-y-2">
                     <p id="sip-result" class="text-2xl font-bold text-center text-primary">Estimated Wealth: ---</p>
@@ -2714,11 +2806,11 @@
                 <h2 class="text-2xl font-bold mb-4 text-center text-primary">Task & Note Manager</h2>
                 
                 <div class="flex flex-wrap justify-center gap-2 mb-6 p-2 rounded-xl bg-[var(--primary-bg)] sticky top-20 z-10">
-                    <button data-filter="All" id="filter-btn-All" class="note-filter-btn p-2 text-xs rounded-full bg-[var(--input-bg)] transition active filter-active" onclick="applyNoteFilter('All')">All</button>
-                    <button data-filter="Task" id="filter-btn-Task" class="note-filter-btn p-2 text-xs rounded-full bg-[var(--input-bg)] transition" onclick="applyNoteFilter('Task')">Tasks</button>
-                    <button data-filter="Note" id="filter-btn-Note" class="note-filter-btn p-2 text-xs rounded-full bg-[var(--input-bg)] transition" onclick="applyNoteFilter('Note')">Notes</button>
-                    <button data-filter="Pending" id="filter-btn-Pending" class="note-filter-btn p-2 text-xs rounded-full bg-[var(--input-bg)] transition" onclick="applyNoteFilter('Pending')">Pending</button>
-                    <button data-filter="Completed" id="filter-btn-Completed" class="note-filter-btn p-2 text-xs rounded-full bg-[var(--input-bg)] transition" onclick="applyNoteFilter('Completed')">Completed</button>
+                    <button data-filter="All" id="filter-btn-All" class="note-filter-btn p-2 text-xs rounded-full bg-[var(--input-bg)] transition active filter-active">All</button>
+                    <button data-filter="Task" id="filter-btn-Task" class="note-filter-btn p-2 text-xs rounded-full bg-[var(--input-bg)] transition">Tasks</button>
+                    <button data-filter="Note" id="filter-btn-Note" class="note-filter-btn p-2 text-xs rounded-full bg-[var(--input-bg)] transition">Notes</button>
+                    <button data-filter="Pending" id="filter-btn-Pending" class="note-filter-btn p-2 text-xs rounded-full bg-[var(--input-bg)] transition">Pending</button>
+                    <button data-filter="Completed" id="filter-btn-Completed" class="note-filter-btn p-2 text-xs rounded-full bg-[var(--input-bg)] transition">Completed</button>
                 </div>
                 <div id="notes-list" class="space-y-3">
                     </div>
@@ -3046,4 +3138,3 @@
 
 </body>
 </html>
-
