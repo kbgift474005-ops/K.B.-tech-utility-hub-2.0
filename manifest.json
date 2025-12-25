@@ -1,37 +1,21 @@
 {
   "name": "K.B.Tech Utility Hub",
   "short_name": "K.B. Tech",
-  "description": "The essential utility app combining powerful calculation tools, financial planning, task management, and personalized settings into one seamless Progressive Web App (PWA).",
-  "id": "com.app.kbtechutilityhub",
-  "start_url": "./index.html",
-  "scope": "./",
+  "description": "Essential utility app for calculations and task management.",
+  "start_url": "index.html",
   "display": "standalone",
-  "orientation": "portrait",
   "background_color": "#111827",
   "theme_color": "#3b82f6",
-  "lang": "en",
-  "dir": "ltr",
+  "orientation": "portrait",
   "icons": [
-    {
-      "src": "android/android-launchericon-512-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
     {
       "src": "android/android-launchericon-192-192.png",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "android/android-launchericon-144-144.png",
-      "sizes": "144x144",
       "type": "image/png"
     },
     {
-      "src": "ios/180.png",
-      "sizes": "180x180",
+      "src": "android/android-launchericon-512-512.png",
+      "sizes": "512x512",
       "type": "image/png"
     }
   ]
